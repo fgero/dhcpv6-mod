@@ -88,7 +88,7 @@ You must already have set VLAN ID (832 for Orange), DHCP client options (V4) 60/
 
 Now you need to set "IPv6 Connection" to "DHCPv6" (instead of Disabled) and "Prefix Delegation Size" to 56 (instead of 64), like so :
 
-<img width="688" alt="IPv6 WAN settings" src="https://github.com/fgero/dhcpv6-mod/assets/34398541/4aa0fe5d-6fda-465f-b988-373a6f174f24">
+![IPv6 WAN settings](https://github.com/fgero/dhcpv6-mod/blob/main/IPV6_WAN_settings.png?raw=true)
 
 
 Then, the ubios-udapi-server process should fork, in addition to udhcpc (V4 client), a new process running our own odhcp6c with all the parameters passed, like so :
