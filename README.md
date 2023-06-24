@@ -139,12 +139,13 @@ Optionaly, if you want to use IPV6 also within your LAN, you must configure one 
 
 It the V6 lease is OK, then you must ensure that our odhcp6c hack is maintained even after a reboot or a FW update.
 You can do that using [these instructions](https://github.com/unifi-utilities/unifios-utilities/tree/main/on-boot-script-2.x#manually-install-steps), from the unifios-utilities repo,
-...or simply by doing :
+
+...or simply by doing (after having checked on github that 1.0.1 is still the last version available) :
 
 ```bash
-cd /data/dhcpv6-mod/udm-boot
-chmod +x install-udm-boot.sh
-./install-udm-boot.sh
+export ONBOOT_DEB=udm-boot-2x_1.0.1_all.deb
+curl -OL https://github.com/unifi-utilities/unifios-utilities/raw/main/on-boot-script-2.x/packages/$ONBOOT_DEB
+dpkg -i $ONBOOT_DEB
 ```
 
 This will put the `udm-boot.service` file in `/lib/systemd/system/udm-boot.service` and enable+start the udm-boot service with systemctl.
