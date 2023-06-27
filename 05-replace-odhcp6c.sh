@@ -8,6 +8,9 @@ mod_bin="/data/local/bin/${file_name}"
 ${mod_bin} -h 2>&1 | grep -q '\-K ' || { echo "ERROR: Valid modified binary not found in ${mod_bin}"; exit 1; }
 echo "Valid modified binary (with -K Cos option) found in ${mod_bin}"
 
+# Avoids wget fw-download.ubnt.com IPv6 endpoints unreachable
+grep -sq '^prefer-family' /root/.wgetrc || echo 'prefer-family = IPv4' >> /root/.wgetrc
+
 case "$(file -b --mime-type ${file})" in
     "application/x-pie-executable")
         echo "$file: detected as an original Unifi executable"

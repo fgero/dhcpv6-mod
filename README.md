@@ -161,11 +161,23 @@ chmod +x *.sh
 cp -p 05-replace-odhcp6c.sh /data/on_boot.d
 ```
 
+## Avoiding Unifi firmware download endpoints not reachable in IPV6
 
+When you update your applications from Unifi UI, `wget` commands are lauched in order to download the new firmware binaries.
+
+Unfortunately, right now at least, the IPV6 endpoints of `fw-download.ubnt.com` are unreachable.
+And, as Unifi does not use `wget` options like `--connect-timeout=01` or the `--prefer-family=IPv4`, the default is to try the first adress returned by the DNS resolver (which is IPV6) and never timeout.
+
+So we need to use the `.wgetrc` file to change the default behaviour of `wget` commands (until Unifi does something)
+
+```bash
+grep -sq '^prefer-family' /root/.wgetrc || echo 'prefer-family = IPv4' >> /root/.wgetrc
+```
 
 ## Rollback (if needed)
 
 In the UI, go to Network > Settings > Internet > Primary (WAN1)
 Set "IPv6 Connection" to "Disabled" (instead of DHCPv6)
 The odhcp6c process should stop within a few seconds.
-You can reactivate it later. 
+
+You can reactivate it later by changing the same setting to "DHCPv6". 
