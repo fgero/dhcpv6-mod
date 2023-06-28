@@ -5,7 +5,9 @@
 
 Enable Unifi UDM/UDR Unifi DHCP V6 client to pass options to ISPs like Orange, by extracting values from V4 DHCP client options.
 
-Note : this mod is needed as there is no possibility to configure DHCP v6 client options in the WAN section of Unifi's GUI.
+Keep the mod even after a reboot, although in the case of a Unifi OS firmware update, currently, we need to pass a manual command after the reboot.
+
+This mod is needed as there is no possibility to configure DHCP v6 client options in the WAN section of Unifi's GUI.
 
 Here are the 4 DHCP options that are propagated from V4 to V6 with needed transformations (headers from RFC8415 for opt 16 and 1) : 
 
@@ -137,19 +139,22 @@ Optionaly, if you want to use IPV6 also within your LAN, you must configure one 
 
 ## Install udm-boot (if not already done)
 
-It the V6 lease is OK, then you must ensure that our odhcp6c hack is maintained even after a reboot or a FW update.
+It the V6 lease is OK, then you must ensure that our odhcp6c hack is maintained even after a reboot.
 You can do that using [these instructions](https://github.com/unifi-utilities/unifios-utilities/tree/main/on-boot-script-2.x#manually-install-steps), from the unifios-utilities repo,
 
 ...or simply by doing (after having checked on github that 1.0.1 is still the last version available) :
 
 ```bash
+cd
 export ONBOOT_DEB=udm-boot-2x_1.0.1_all.deb
 curl -OL https://github.com/unifi-utilities/unifios-utilities/raw/main/on-boot-script-2.x/packages/$ONBOOT_DEB
 dpkg -i $ONBOOT_DEB
 ```
 
 This will put the `udm-boot.service` file in `/lib/systemd/system/udm-boot.service` and enable+start the udm-boot service with systemctl.
-This script can be re-launched to reinstall or change the file.
+
+**IMPORTANT NOTE** : whilst this works with a normal reboot, when updating **Unifi OS firmware**, the `dpkg -i udm-boot-2x_1.0.1_all.deb` command needs to be issued again after the reboot. 
+I am working on a potential workaround (probably using something like the `ubnt-dkpg-cache` stuff)
 
 Then you can add ".sh" files in the `/data/on_boot.d/` directory so that they are executed at boot.
 
