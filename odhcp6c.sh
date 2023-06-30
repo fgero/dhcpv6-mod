@@ -4,6 +4,7 @@
 # -D means : Discard advertisements without any address or prefix proposed
 # -P 56 comes from UI WAN section (defaut 48 to change as IT MUST MATCH what we will get from Orange e.g. 2a01:cb00:647:6c00::/56)
 
+org_odhcp6c=/usr/sbin/odhcp6c-org       # We have renamed original to -org
 new_odhcp6c=/data/local/bin/odhcp6c     # Updated exec (replaces Unifi's old odhcp6c), will be "exec" at the end of this script
 
 vendor_class_pfx="0000040E0005"              # Prefix for option 16 DHCPv6 : SagemCom IANA enterp number + strlen 'sagem' (0005)
@@ -11,7 +12,13 @@ client_id_pfx="00030001"                     # Prefix for option 1 DHCPv6 : DUID
 
 [[ $# -lt 1 ]] && { echo "At least 1 (last argument) : WAN interface, e.g. eth4.832"; exit 1; }
 [[ $# -eq 2 && "$1" == "test" ]] && test_mode=1 || test_mode=0
-[[ ! -x "$new_odhcp6c" ]] && { echo "Could not find updated odhcp6c executable $new_odhcp6c" >&2 ; exit 1; }
+
+dhcp6_client=${new_odhcp6c}
+${org_odhcp6c} -h 2>&1 | grep -q '\-K '                   # Test if Unifi exec finally has the CoS (-K) option
+if [ $? -eq 0 ]; then dhcp6_client=${org_odhcp6c}; fi     # If YES, then use Unifi exec instead of our new one
+
+[[ ! -x "$dhcp6_client" ]] && { echo "Could not find odhcp6c executable $dhcp6_client" >&2 ; exit 1; }
+echo "Selected DHCPv6 client executable (with support for CoS) : ${dhcp6_client}"
 
 # Interface name provided by udapi-server as last arg, we will look for it in JSON config
 arg_iface="${@: -1}"
@@ -52,5 +59,5 @@ arg_without_e=$(echo " $@" | sed "s/ -e//")
 
 [[ $test_mode -eq 1 ]] && exit 0
 
-exec ${new_odhcp6c} -a -f -K6 -R -r11,17,23,24 \
+exec ${dhcp6_client} -a -f -K6 -R -r11,17,23,24 \
 -V ${vendor_class_16} -c ${client_id_1} -u ${user_class_15} -x 11:${authentication_11} ${arg_without_e}
