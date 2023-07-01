@@ -1,5 +1,8 @@
 # dhcpv6-mod
 
+*Last update: July 1, 2023*
+
+NOTE : please run the newly provided `./install_udm_boot.sh` if you want to keep the DHCPv6 mod even after a Unifi OS firmware update, without having to `dpkg -i` again the deb package, see issue #1 and the [Install udm-boot](#Install-udm-boot) section below.
 
 ## Features
 
@@ -137,24 +140,20 @@ Even after getting a V6 lease, your WAN interface will not get a public IPV6 add
 Optionaly, if you want to use IPV6 also within your LAN, you must configure one of your Networks in the UI, with IPv6 Interace Type set to "Prefix Delegation", RA enabled, et leave the rest as default.
 
 
-## Install udm-boot (if not already done)
+## Install udm-boot
 
 It the V6 lease is OK, then you must ensure that our odhcp6c hack is maintained even after a reboot.
-You can do that using [these instructions](https://github.com/unifi-utilities/unifios-utilities/tree/main/on-boot-script-2.x#manually-install-steps), from the unifios-utilities repo,
+You can do that using [these instructions](https://github.com/unifi-utilities/unifios-utilities/tree/main/on-boot-script-2.x#manually-install-steps), from the unifios-utilities repo, but this does not survive a firmware update (see issue #1).
 
-...or simply by doing (after having checked on github that 1.0.1 is still the last version available) :
+So I would suggest to do simply this :
 
 ```bash
-cd
-export ONBOOT_DEB=udm-boot-2x_1.0.1_all.deb
-curl -OL https://github.com/unifi-utilities/unifios-utilities/raw/main/on-boot-script-2.x/packages/$ONBOOT_DEB
-dpkg -i $ONBOOT_DEB
+cd /data/dhcpv6-mod
+./install_udm_boot.sh
 ```
 
-This will put the `udm-boot.service` file in `/lib/systemd/system/udm-boot.service` and enable+start the udm-boot service with systemctl.
-
-**IMPORTANT NOTE** : whilst this works with a normal reboot, when updating **Unifi OS firmware**, the `dpkg -i udm-boot-2x_1.0.1_all.deb` command needs to be issued again after the reboot. 
-I am working on a potential workaround (probably using something like the `ubnt-dkpg-cache` stuff)
+This will add the `udm-boot` package (provided as a `.deb` file in this repo) to the `ubnt-dpkg-cache` facility, so that it is restored if missing after a firmware update reboot.
+The package itself, when installed, puts the `udm-boot.service` file in `/lib/systemd/system/udm-boot.service` and enable+start the udm-boot service with systemctl.
 
 Then you can add ".sh" files in the `/data/on_boot.d/` directory so that they are executed at boot.
 
