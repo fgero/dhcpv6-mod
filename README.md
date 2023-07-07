@@ -74,18 +74,24 @@ cp -p odhcp6c /data/local/bin
 # then optionaly delete the source code (rm -rf /root/odhcp6c)
 ```
 
-## Install dhcpv6-mod files
+## Install (or update) dhcpv6-mod files
 
 Now we can save and replace Unifi's `/usr/sbin/odhcp6c` by our own shell script `odhcp6c.sh` (that will prepare V6 args and exec the new odhcp6c exec we just built) :
  
 ```bash
-cd /data/dhcpv6-mod
-chmod +x *.sh
-mv /usr/sbin/odhcp6c /usr/sbin/odhcp6c-org
-cp -p odhcp6c.sh /usr/sbin/odhcp6c
+./05-replace-odhcp6c.sh
 ```
 
-## Activate and test DHCP V6 client for WAN (in addition to DHCP V4)
+If you want to **update** `/usr/sbin/odhcp6c` with a new version of `odhcp6c.sh` you must do like this (otherwise the script will refuse to overwrite) :
+
+```bash
+./05-replace-odhcp6c.sh --update
+```
+
+If the odhcp6c (v6 client) is already running, and if there is a difference with the repo version, the `05-replace-odhcp6c.sh` will restart both dhcp v4 and v6 clients. This will simply re-launch a discover phase for both (as V4/V6 constistency is needed in case of Orange), without interrupting the connection.
+
+
+## Activate and test DHCP V6 client for WAN for the first time (in addition to DHCP V4)
 
 In the UI, go to Network > Settings > Internet > Primary (WAN1)
 
@@ -93,7 +99,7 @@ You must already have set VLAN ID (832 for Orange), DHCP client options (V4) 60/
 
 Now you need to set "IPv6 Connection" to "DHCPv6" (instead of Disabled) and "Prefix Delegation Size" to 56 (instead of 64), like so :
 
-![IPv6 WAN settings](https://github.com/fgero/dhcpv6-mod/blob/main/IPV6_WAN_settings.png?raw=true)
+![IPv6 WAN settings](https://github.com/fgero/dhcpv6-mod/blob/main/images/IPV6_WAN_settings.png?raw=true)
 
 
 Then, the ubios-udapi-server process should fork, in addition to udhcpc (V4 client), a new process running our own odhcp6c with all the parameters passed, like so :
@@ -148,7 +154,7 @@ You can do that using [these instructions](https://github.com/unifi-utilities/un
 So I would suggest to do simply this :
 
 ```bash
-cd /data/dhcpv6-mod
+cd udm-boot
 ./install_udm_boot.sh
 ```
 
@@ -161,7 +167,6 @@ In our case, we need to replace at each reboot the /usr/sbin/odhcp6c executable 
 
 ```bash
 cd /data/dhcpv6-mod
-chmod +x *.sh
 cp -p 05-replace-odhcp6c.sh /data/on_boot.d
 ```
 
@@ -173,6 +178,8 @@ Unfortunately, right now at least, the IPV6 endpoints of `fw-download.ubnt.com` 
 And, as Unifi does not use `wget` options like `--connect-timeout=01` or the `--prefer-family=IPv4`, the default is to try the first adress returned by the DNS resolver (which is IPV6) and never timeout.
 
 So we need to use the `.wgetrc` file to change the default behaviour of `wget` commands (until Unifi does something)
+
+NOTE : if you used the `05-replace-odhcp6c.sh` script to install, as you should have, then it's already done, this is for information or check :
 
 ```bash
 grep -sq '^prefer-family' /root/.wgetrc || echo 'prefer-family = IPv4' >> /root/.wgetrc
