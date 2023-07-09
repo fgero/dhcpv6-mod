@@ -8,14 +8,14 @@ It should work on any UDM/UDMPro/UDR after 2.4.x.
 
 The mod is automaticaly re-applied after a reboot, and even after Unifi OS firmware updates if you install the specific udm-boot package of this repo.
 
-**Table of content:**
+**Table of contents :**
 - [DHCP V6 options](#dhcp6_options)
 - [How does it work ?](#how_does_it_work)
-- [Build a recent version of odhcp6c](#build_odhcp6c)
-- [Download dhcpv6_mod files](#download_dhcpv6_mod)
+- [Build a odhcp6c supporting CoS](#build_odhcp6c)
+- [Download dhcpv6-mod files](#download_dhcpv6_mod)
 - [Install/update dhcpv6-mod files](#install_dhcpv6_mod)
 - [Activate DHCPv6 WAN client](#activate_dhcpv6)
-- [Install our version of udm-boot](#install_udm_boot)
+- [Install udm-boot package](#install_udm_boot)
 - [Rollback (if needed)](#rollback)
 &nbsp;  
 &nbsp;  
@@ -42,17 +42,22 @@ Here are the 4 DHCP options that are propagated from V4 to V6 with needed transf
 
 ## How does it work ?
 &nbsp;  
-- Build a more recent version of `odhcp6c` (from [openwrt repo](https://github.com/openwrt/odhcp6c)) that has the `-K` option in order to pass a CoS for DHCP requests
-- Save and replace Unifi's `/usr/sbin/odhcp6c` (an old version without the '-K' option) by our own shell script `odhcp6c.sh`
-- This shell script will calculate the DHCP V6 options by fetching the V4 ones from `ubios-udapi-server` running config, add the necessary headers, and then `exec` the new `/data/local/bin/odhcp6c` we just built.
-- in addition, we provide a `udm-boot` package that will reinstall these modifications even after a Unifi OS firmware update 
+
+As a prerequisite, of course, you must have entered the needed DHCP V4 WAN options (60, 61, 77 and 90), using Unifi's GUI WAN1 settings, as they are needed to generate V6 options. 
+
+- From the UDR/UDM, build a more recent version of `odhcp6c` (from [openwrt repo](https://github.com/openwrt/odhcp6c)) that has the `-K` option in order to pass a CoS for DHCP requests
+- Replace Unifi's `/usr/sbin/odhcp6c` by our own shell script `odhcp6c.sh`, that :
+  - generates valid DHCP V6 options by fetching the V4 options values from `ubios-udapi-server` config file
+  - prepare the V6 options with needed prefixes and formats
+  - finally, `exec` the new `/data/local/bin/odhcp6c` we just built
+- In addition, install our own `udm-boot` Debian package (and systemd service) that will re-apply dhcpv6-mod even after a Unifi OS firmware update 
 
 &nbsp;  
 &nbsp;  
 
 <a id="build_odhcp6c"></a>
 
-## On the UDM/UDR, build a recent version of odhcp6c from openwrt
+## On the UDM/UDR, build a version of odhcp6c supporting CoS
 &nbsp;  
 First (if not already done), install git and cmake on the UDM/UDR :
 
@@ -60,7 +65,7 @@ First (if not already done), install git and cmake on the UDM/UDR :
 apt-get install -y git cmake
 ```
 
-Then make the odhcp6c executable locally (here in root's home directory), and deploy it in `/data/local/bin` :
+Then make a new odhcp6c executable locally (here in root's home directory), from the [openwrt repo](https://github.com/openwrt/odhcp6c), and deploy it in `/data/local/bin` :
 
 ```bash
 cd
@@ -70,7 +75,10 @@ cmake .
 make
 mkdir -p /data/local/bin
 cp -p odhcp6c /data/local/bin
-# then optionaly delete the source code (rm -rf /root/odhcp6c)
+```
+[OPTIONAL] You can delete the source code (not needed for our purpose) :
+```bash
+rm -rf /root/odhcp6c
 ```
 
 &nbsp;  
@@ -103,13 +111,20 @@ mv dhcpv6-mod-main dhcpv6-mod
 
 ## Install (or update) dhcpv6-mod files
 &nbsp;  
+
+Go to the directory we just cloned :
+
+```bash
+cd /data/dhcpv6-mod
+```
+
 Now we can save and replace Unifi's `/usr/sbin/odhcp6c` by our own shell script `odhcp6c.sh` (that will prepare V6 args and exec the new odhcp6c exec we just built), by runnning this script :
  
 ```bash
 ./05-replace-odhcp6c.sh
 ```
 
-If you want to <ins>**update**</ins> `/usr/sbin/odhcp6c` with a new version of `odhcp6c.sh` you must do like this (otherwise the script will refuse to overwrite /usr/sbin) :
+Alternatively, if you want to <ins>**update**</ins> `/usr/sbin/odhcp6c` with a new version of `odhcp6c.sh` you must do like this (otherwise the script will refuse to overwrite /usr/sbin) :
 
 ```bash
 ./05-replace-odhcp6c.sh --update
@@ -174,7 +189,7 @@ killall udhcpc odhcp6c
 
 Even after getting a V6 lease, your WAN interface will not get a public IPV6 address, this is expected (apparently) in a V4+V6 (double stack) situation.
 
-Optionaly, if you want to use IPV6 also within your LAN, you must configure one of your Networks in the UI, with IPv6 Interace Type set to "Prefix Delegation", RA enabled, et leave the rest as default.
+[OPTIONAL] If you want to use IPV6 also within your LAN, you must configure one of your Networks in the UI, with IPv6 Interace Type set to "Prefix Delegation", RA enabled, et leave the rest as default.
 
 ![IPv6 LAN settings](https://github.com/fgero/dhcpv6-mod/blob/main/images/IPV6_LAN_settings.png#gh-dark-mode-only)
 ![IPv6 LAN settings](https://github.com/fgero/dhcpv6-mod/blob/main/images/IPV6_LAN_settings_light.png#gh-light-mode-only)
@@ -187,12 +202,12 @@ Optionaly, if you want to use IPV6 also within your LAN, you must configure one 
 ## Install udm-boot
 &nbsp;  
 It the V6 lease is OK, then you must ensure that our odhcp6c hack is maintained even after a reboot.
-You can do that using [these instructions](https://github.com/unifi-utilities/unifios-utilities/tree/main/on-boot-script-2.x#manually-install-steps), from the unifios-utilities repo, but this does not survive a firmware update (see issue #1).
+You could do that using [these instructions](https://github.com/unifi-utilities/unifios-utilities/tree/main/on-boot-script-2.x#manually-install-steps), from the unifios-utilities repo, but this does not survive a firmware update (see issue #1).
 
 So I would suggest to do simply this :
 
 ```bash
-cd udm-boot
+cd /data/dhcpv6-mod/udm-boot
 ./install_udm_boot.sh
 ```
 
@@ -204,9 +219,8 @@ Then you can add ".sh" files in the `/data/on_boot.d/` directory so that they ar
 In our case, we need to replace at each reboot the /usr/sbin/odhcp6c executable (that is automatically restored by Unifi each time) by our script. For that we must copy the `05-replace-odhcp6c.sh` script :
 
 ```bash
-cd /data/dhcpv6-mod
 mkdir -p /data/on_boot.d
-cp -p 05-replace-odhcp6c.sh /data/on_boot.d
+cp -p /data/dhcpv6-mod/05-replace-odhcp6c.sh /data/on_boot.d
 ```
 
 &nbsp;  
