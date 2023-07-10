@@ -62,7 +62,7 @@ As a prerequisite, of course, you must have entered the needed DHCP V4 WAN optio
 First (if not already done), install git and cmake on the UDM/UDR :
 
 ```bash
-apt-get install -y git cmake
+apt-get install -y git cmake file
 ```
 
 Then make a new odhcp6c executable locally (here in root's home directory), from the [openwrt repo](https://github.com/openwrt/odhcp6c), and deploy it in `/data/local/bin` :
