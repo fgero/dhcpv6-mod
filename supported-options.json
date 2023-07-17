@@ -1,0 +1,15 @@
+{
+    "supportedOptions": [
+       { "number": 1, "optionAlias": "clientid", "optionFormat": "hex", "odhcp6cOption": "-c " },
+       { "number": 11, "optionAlias": "authentication", "optionFormat": "hex", "odhcp6cOption": "-x 11:" },
+       { "number": 15, "optionAlias": "userclass", "optionFormat": "string", "odhcp6cOption": "-u " },
+       { "number": 16, "optionAlias": "vendorclass", "optionFormat": "hex", "odhcp6cOption": "-V "  },
+       { "number": 21, "optionAlias": "sipserver_d", "optionFormat": "string", "odhcp6cOption": "-x 21:" },
+       { "number": 22, "optionAlias": "sipserver_a", "optionFormat": "string", "odhcp6cOption": "-x 22:" },
+       { "number": 23, "optionAlias": "dns", "optionFormat": "string", "odhcp6cOption": "-x 23:" },
+       { "number": 24, "optionAlias": "search", "optionFormat": "string", "odhcp6cOption": "-x 24:" },
+       { "number": 31, "optionAlias": "sntpservers", "optionFormat": "string", "odhcp6cOption": "-x 31:" },
+       { "number": 56, "optionAlias": "ntpserver", "optionFormat": "hex", "odhcp6cOption": "-x 56:" },
+       { "number": 68, "optionAlias": "vss", "optionFormat": "hex", "odhcp6cOption": "-x 68:" }
+    ]
+}

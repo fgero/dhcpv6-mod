@@ -1,55 +1,54 @@
 # dhcpv6-mod
 
-Enable Unifi UDM/UDR Unifi DHCP V6 client to pass options to ISPs like Orange, by extracting values from V4 DHCP client options that you've already set in the UI.
+This project enables Unifi UDM/UDR to provide required DHCP V6 client options to ISPs (like Orange France), including by extracting values from V4 DHCP client options  you've already set in Unifi UI.
 
-This mod is needed as there is no possibility to configure DHCP v6 client options in the WAN section of Unifi's GUI.
+This mod was developed because there's no way to configure DHCP v6 client options in the WAN section of Unifi's UI. It should work on any UDM/UDMPro/UDR with at least UnifiOS 2.4.x (3.x is recommended as I can no longer test in 2.x).
 
-It should work on any UDM/UDMPro/UDR after 2.4.x.
+&nbsp;
 
-The mod is automaticaly re-applied after a reboot, and even after Unifi OS firmware updates if you install the specific udm-boot package of this repo.
+> **NEW**:
+> If you're not using Orange France ISP, it's now possible to configure your own DHCPv6 options (see the [Initialize DHCPv6 config file](#configure_dhcpv6) section).
 
-**Table of contents :**
-- [DHCP V6 options](#dhcp6_options)
+&nbsp;
+
+
+> **WARNING**:
+> For existing users, after any update of this repo <u>or of your config file</u>, please don't forget to run the `./install-dhcpv6-mod.sh` command again (see [Install or update dhcpv6-mod](#install_dhcpv6_mod)).
+
+&nbsp;
+
+In addition, it is highly recommended that you install the `udm-boot` package included in this repo, so that the mod will be automaticaly re-applied after a reboot, even after Unifi OS firmware updates.
+&nbsp;  
+&nbsp;  
+
+
+## Table of Contents
+
 - [How does it work ?](#how_does_it_work)
 - [Build a odhcp6c supporting CoS](#build_odhcp6c)
 - [Download dhcpv6-mod files](#download_dhcpv6_mod)
-- [Install/update dhcpv6-mod files](#install_dhcpv6_mod)
+- [Initialize DHCPv6 config file](#configure_dhcpv6)
+- [Install (or update) dhcpv6-mod](#install_dhcpv6_mod)
 - [Activate DHCPv6 WAN client](#activate_dhcpv6)
 - [Install udm-boot package](#install_udm_boot)
 - [Rollback (if needed)](#rollback)
 &nbsp;  
 &nbsp;  
 
-<a id="dhcp6_options"></a>
-
-## DHCP V6 options
-&nbsp;  
-
-Here are the 4 DHCP options that are propagated from V4 to V6 with needed transformations, e.g. headers specified by [RFC8415](https://datatracker.ietf.org/doc/html/rfc8415) for options 16 and 1) : 
-
-
-| Name 	| Opt V4    | Opt V6 	| Header V6 | Value (from V4)   | Example of odhcp6c argument    |
-|------	|-------  |-------	|---------- |----------------   |------------------ |
-| [Vendor class](https://www.rfc-editor.org/rfc/rfc3315.html#section-22.16) | 60    | 16  | [0000040E 0005](https://www.iana.org/assignments/enterprise-numbers/) (4-byte IANA enterprise# + 2-byte length)  | Vendor class string in hex    | -V [000000040E0005](https://www.iana.org/assignments/enterprise-numbers/)736167656D (here 5 bytes ASCII hex code for 'sagem')    |
-| [Client identifier](https://www.rfc-editor.org/rfc/rfc8415.html#page-99) | 61    | 1  | [0003 0001](https://datatracker.ietf.org/doc/html/rfc8415#section-11) (DUID type LL + hw type ethernet    | Mac Address Clone (UI)  | -c [00030001](https://datatracker.ietf.org/doc/html/rfc8415#section-11)xxxxxxxxxxxx (6 bytes in hex for cloned macaddr)    |
-| [User class](https://www.rfc-editor.org/rfc/rfc8415.html#page-115) | 77    | 15   | None, because -u already adds 2-byte length field (e.g. 002B)    | When using -u, pass a string (not hexstring)  | -u FSVDSL_livebox.Internet.softathome.LiveboxN (here 43 or 0x2b bytes as hexstring)   |
-| [Authentication](https://www.rfc-editor.org/rfc/rfc8415.html#section-21.11) | 90    | 11   | None    | Authentication in hexstring (same as V4 opt 90 without ':')  | -x 11:00....xx (70 bytes in hexstring for auth)    |
-
-&nbsp;  
-&nbsp;  
-
 <a id="how_does_it_work"></a>
 
 ## How does it work ?
-&nbsp;  
+<sup>[(Back to top)](#table-of-contents)</sup>
+&nbsp;
 
-As a prerequisite, of course, you must have entered the needed DHCP V4 WAN options (60, 61, 77 and 90), using Unifi's GUI WAN1 settings, as they are needed to generate V6 options. 
+As a prerequisite, you must have entered the needed DHCP V4 WAN options (for Orange : 60, 61, 77 and 90), using Unifi's GUI WAN1 settings, as they are needed to generate V6 options. 
 
-- From the UDR/UDM, build a more recent version of `odhcp6c` (from [openwrt repo](https://github.com/openwrt/odhcp6c)) that has the `-K` option in order to pass a CoS for DHCP requests
-- Replace Unifi's `/usr/sbin/odhcp6c` by our own shell script `odhcp6c.sh`, that :
-  - generates valid DHCP V6 options by fetching the V4 options values from `ubios-udapi-server` config file
-  - prepare the V6 options with needed prefixes and formats
-  - finally, `exec` the new `/data/local/bin/odhcp6c` we just built
+Then :
+- From the UDR/UDM shell prompt, build a more recent version of `odhcp6c` (from [openwrt repo](https://github.com/openwrt/odhcp6c)) that has the `-K` option in order to pass a CoS for DHCP requests
+- Replace Unifi's `/usr/sbin/odhcp6c` by our own shell script `odhcp6c.sh`, which will :
+  - fetch the DHCPv4 options values from `ubios-udapi-server` state file
+  - prepare the DHCPv6 options with needed prefixes and formats, according to a customizable configuration file 
+  - finally, `exec` the new `/data/local/bin/odhcp6c` (the one we just built), with all the adequate options
 - In addition, install our own `udm-boot` Debian package (and systemd service) that will re-apply dhcpv6-mod even after a Unifi OS firmware update 
 
 &nbsp;  
@@ -58,14 +57,16 @@ As a prerequisite, of course, you must have entered the needed DHCP V4 WAN optio
 <a id="build_odhcp6c"></a>
 
 ## On the UDM/UDR, build a version of odhcp6c supporting CoS
-&nbsp;  
+<sup>[(Back to top)](#table-of-contents)</sup>
+&nbsp;
+
 First (if not already done), install git and cmake on the UDM/UDR :
 
 ```bash
 apt-get install -y git cmake file
 ```
 
-Then make a new odhcp6c executable locally (here in root's home directory), from the [openwrt repo](https://github.com/openwrt/odhcp6c), and deploy it in `/data/local/bin` :
+Then, make a new odhcp6c executable locally (here in root's home directory), from the [openwrt repo](https://github.com/openwrt/odhcp6c), and deploy it in `/data/local/bin` :
 
 ```bash
 cd
@@ -76,6 +77,12 @@ make
 mkdir -p /data/local/bin
 cp -p odhcp6c /data/local/bin
 ```
+Check that our new odhcp6c supports the CoS option (the line with '-K' should be displayed) :
+```console
+# /data/local/bin/odhcp6c -h 2>&1 | grep priority
+	-K <sk-prio>	Set packet kernel priority (0)
+```
+
 [OPTIONAL] You can delete the source code (not needed for our purpose) :
 ```bash
 rm -rf /root/odhcp6c
@@ -87,11 +94,12 @@ rm -rf /root/odhcp6c
 <a id="download_dhcpv6_mod"></a>
 
 ## Download dhcpv6-mod files
+<sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;  
 
-We will install the files in the `/data/dhcpv6-mod` directory (persisted after reboots/upgrades).
+Install the repo files in the `/data/dhcpv6-mod` directory (/data is persisted after reboots/upgrades).
 
-You can either use `git` to clone this repo :
+You can either use `git` to clone this repo (**recommended**) :
 ```bash
 cd /data
 git clone https://github.com/fgero/dhcpv6-mod.git
@@ -107,38 +115,62 @@ mv dhcpv6-mod-main dhcpv6-mod
 &nbsp;  
 &nbsp;  
 
-<a id="install_dhcpv6_mod"></a>
+<a id="configure_dhcpv6"></a>
 
-## Install (or update) dhcpv6-mod files
+## Initialize DHCP V6 configuration file 
+<sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;  
 
-Go to the directory we just cloned :
+If you are using Orange France ISP, then you may skip this section and move to the next section ([Install/update dhcpv6-mod files](#install_dhcpv6_mod)), as the installation will create the `/data/local/etc/dhcpv6.conf` config file for you, with Orange settings by default.
+
+If you are NOT using Orange France ISP, the first time you install dhcpv6-mod, you must create the `/data/local/etc/dhcpv6.conf` file yourself before moving to the next section (installation).
+
+Please read the [CONFIGURE.md](CONFIGURE.md) documentation page, which describes how to create your own config file.
+
+&nbsp;  
+&nbsp;  
+
+<a id="install_dhcpv6_mod"></a>
+
+## Install (or update) dhcpv6-mod
+<sup>[(Back to top)](#table-of-contents)</sup>
+&nbsp;  
+
+Go to the directory we just cloned, and run the install/update script :
 
 ```bash
 cd /data/dhcpv6-mod
+./install-dhcpv6-mod.sh
 ```
+This command must be issued :
+- when installing `dhcpv6-mod` for the first time
+- when `dhcpv6-mod` repository gets an update (except if limited to documentation)
+- when you update your configuration file (`/data/local/etc/dhcpv6.conf`)
 
-Now we can save and replace Unifi's `/usr/sbin/odhcp6c` by our own shell script `odhcp6c.sh` (that will prepare V6 args and exec the new odhcp6c exec we just built), by runnning this script :
- 
+NOTE : the command will initially create the `/data/local/etc/dhcpv6.conf` configuration file <u>ONLY if it does not already exist</u>, using the `dhcpv6-orange.conf` file content.
+
+In fact, the `./install-dhcpv6-mod.sh` command can be run at any time : it will only update `/usr/sbin/odhcp6c` with a new version of `odhcp6c.sh` if one of the following is true :
+- file `/usr/sbin/odhcp6c` is older than `odhcp6c.sh` 
+- process `odhcp6c` is older than `odhcp6c.sh` or `dhcpv6.conf`
+
+If the script does in fact need to change something, and if DHCPv6 client was already running, it will finish by a restart of both DHCP v4 and v6 clients. This will simply launch a discover phase for both (V4/V6 consistency is needed by Orange), without interrupting the WAN connection. 
+
+You can check the log generated by the restart of both DHCP clients (if this was the case), with :
 ```bash
-./05-replace-odhcp6c.sh
+grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log 
 ```
-
-Alternatively, if you want to <ins>**update**</ins> `/usr/sbin/odhcp6c` with a new version of `odhcp6c.sh` you must do like this (otherwise the script will refuse to overwrite /usr/sbin) :
-
-```bash
-./05-replace-odhcp6c.sh --update
-```
-
-The script will only do something if there's a difference between `/usr/sbin/odhcp6c` and `/data/dhcpv6-mod/odhcp6c.sh` : in that case, the `05-replace-odhcp6c.sh` will restart both dhcp v4 and v6 clients. This will simply re-launch a discover phase for both (as V4/V6 constistency is needed in case of Orange), without interrupting the connection.
+And of course check the WAN connection via ping or other.
 
 &nbsp;  
 &nbsp;  
+
 
 <a id="activate_dhcpv6"></a>
 
 ## Activate and test DHCP V6 client for WAN for the first time
+<sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;  
+
 In the UI, go to Network > Settings > Internet > Primary (WAN1)
 
 You must already have set VLAN ID (832 for Orange), DHCP client options (V4) 60/77/90, DHCP CoS 6.
@@ -156,11 +188,11 @@ root     2574251    4134  0 Jun18 ?        00:00:00 /usr/bin/busybox-legacy/udhc
 root     2574252    4134  0 Jun18 ?        00:00:00 /data/local/bin/odhcp6c -a -f -K6 -R -r11,17,23,24 -V <pfx+vendorclass> -c <pfx+clientid> -u <userclass_string> -x 11:<auth> -v -s /usr/share/ubios-udapi-server/ubios-odhcp6c-script -D -P 56 eth4.832
 ```
 
-You can check the DHCP discover & lease in the system log :
+You can check the DHCP V6 discover process and lease in the system log :
 
 ```console
-# grep -e dhcpc -e odhcp6c /var/log/daemon.log
-(...)
+# grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log
+(....below some extracts, you'll get more....)
 2023-06-18T17:01:51+02:00 UDR odhcp6c[2574252]: Starting SOLICIT transaction (timeout 4294967295s, max rc 0)
 2023-06-18T17:01:51+02:00 UDR odhcp6c[2574252]: Got a valid ADVERTISE after 10ms
 2023-06-18T17:01:51+02:00 UDR odhcp6c[2574252]: IA_PD 0001 T1 87555 T2 483840
@@ -181,10 +213,17 @@ You can check the DHCP discover & lease in the system log :
 
 Here you asked and got a /56 prefix (7 bytes), like [2a01:xxxx:xxx:xx](#)00:, and the 8th byte (00) is reserved by your router/box, you can use 01 to FF (254 subnets of /64) 
 
-If this does not work, you can try to reset both DHCP v4 and v6 sequences (apparently Orange wants that):
+If this does not work, you can try to reset both DHCP v4 and v6 sequences :
 
 ```bash
 killall udhcpc odhcp6c 
+# wait a few seconds
+grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log
+```
+
+If you need to only check the log generated by odhcp6c.sh, in order to see DHCPv6 option generation :
+```bash
+grep dhcpv6-mod /var/log/daemon.log 
 ```
 
 Even after getting a V6 lease, your WAN interface will not get a public IPV6 address, this is expected (apparently) in a V4+V6 (double stack) situation.
@@ -200,11 +239,13 @@ Even after getting a V6 lease, your WAN interface will not get a public IPV6 add
 <a id="install_udm_boot"></a>
 
 ## Install udm-boot
+<sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;  
-It the V6 lease is OK, then you must ensure that our odhcp6c hack is maintained even after a reboot.
-You could do that using [these instructions](https://github.com/unifi-utilities/unifios-utilities/tree/main/on-boot-script-2.x#manually-install-steps), from the unifios-utilities repo, but this does not survive a firmware update (see issue #1).
 
-So I would suggest to do simply this :
+It the V6 lease is OK, then you must ensure that our odhcp6c hack is maintained even after a reboot.
+You could do that using [these instructions](https://github.com/unifi-utilities/unifios-utilities/tree/main/on-boot-script-2.x#manually-install-steps), from the official unifios-utilities repo, but this does not survive a firmware update (see issue [#1](https://github.com/fgero/dhcpv6-mod/issues/1)).
+
+So I would suggest to use our own installation script :
 
 ```bash
 cd /data/dhcpv6-mod/udm-boot
@@ -214,29 +255,34 @@ cd /data/dhcpv6-mod/udm-boot
 This will add the `udm-boot` package (provided as a `.deb` file in this repo) to the `ubnt-dpkg-cache` facility, so that it is restored if missing after a firmware update reboot.
 The package itself, when installed, puts the `udm-boot.service` file in `/lib/systemd/system/udm-boot.service` and enable+start the udm-boot service with systemctl.
 
-Then you can add ".sh" files in the `/data/on_boot.d/` directory so that they are executed at boot.
+Then you can add ".sh" files in the `/data/on_boot.d/` directory so that they are executed at boot (for dhcpv6-mod purposes or any other...).
 
-In our case, we need to replace at each reboot the /usr/sbin/odhcp6c executable (that is automatically restored by Unifi each time) by our script. For that we must copy the `05-replace-odhcp6c.sh` script :
+In our case, we need to replace at each reboot the old /usr/sbin/odhcp6c executable (that is automatically restored by Unifi each time) by our dhcpv6-mod script. 
+
+For that, we need to create a symlink `05-replace-odhcp6c.sh` pointing to the real script in `udm-boot/` :
 
 ```bash
 mkdir -p /data/on_boot.d
-cp -p /data/dhcpv6-mod/05-replace-odhcp6c.sh /data/on_boot.d
+ln -fs /data/dhcpv6-mod/udm-boot/05-replace-odhcp6c.sh /data/on_boot.d/05-replace-odhcp6c.sh
 ```
+
 
 &nbsp;  
 
 <a id="force_firmware_update_in_V4"></a>
 
-### Note about avoiding Unifi firmware download endpoints not reachable in IPV6
+### Note about avoiding Unifi firmware IPV6 download endpoints not reachable
+<sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;  
-When you update your applications from Unifi UI, `wget` commands are lauched in order to download the new firmware binaries.
 
-Unfortunately, right now at least, the IPV6 endpoints of `fw-download.ubnt.com` are unreachable.
-And, as Unifi does not use `wget` options like `--connect-timeout=01` or the `--prefer-family=IPv4`, the default is to try the first adress returned by the DNS resolver (which is IPV6) and never timeout.
+When you update your applications from Unifi UI, `wget` commands are launched in the background, to download the new firmware binaries.
+
+Unfortunately, as of July 2023 at least, the IPV6 endpoints of `fw-download.ubnt.com` are unreachable.
+And, as Unifi does not use `wget` options like `--connect-timeout=01` or the `--prefer-family=IPv4`, the default is to try the first adress returned by the DNS resolver, which is IPV6 in our case, and never timeout.
 
 So we need to use the `.wgetrc` file to change the default behaviour of `wget` commands (until Unifi does something)
 
-NOTE : if you used the `05-replace-odhcp6c.sh` script to install, as you should have, then it's already done, this is for information or check :
+(NOTE : if you used the `install-dhcpv6-mod.sh` script to install, as you should have, then it's already done for you, this is for information or check)
 
 ```bash
 grep -sq '^prefer-family' /root/.wgetrc || echo 'prefer-family = IPv4' >> /root/.wgetrc
@@ -248,10 +294,13 @@ grep -sq '^prefer-family' /root/.wgetrc || echo 'prefer-family = IPv4' >> /root/
 <a id="rollback"></a>
 
 ## Rollback (if needed)
+<sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;  
+
 In the UI, go to Network > Settings > Internet > Primary (WAN1)
 Set "IPv6 Connection" to "Disabled" (instead of DHCPv6)
-The odhcp6c process should stop within a few seconds.
+
+Then, the odhcp6c process should stop within a few seconds.
 
 Also deactivate IPv6 in LAN if you have set that.
 

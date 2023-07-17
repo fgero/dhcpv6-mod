@@ -9,8 +9,8 @@
 #########################################################################################################
 
 green='\e[32m'; red='\e[31m'; clear='\e[0m'
-colorGreen() { echo -ne $green$1$clear; }
-colorRed() { echo -ne $red$1$clear; }
+colorGreen() { printf $green$1$clear; }
+colorRed() { printf $red$1$clear; }
 
 errExit() {
   >&2 echo "$(colorRed 'ERROR'): $1"
