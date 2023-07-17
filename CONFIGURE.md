@@ -12,6 +12,7 @@ If you are not using Orange France, your ISP has probably different requirements
 
 - [Initial creation](#initialize)
 - [Basic principles](#basic_principles)
+- [Other settings](#special_settings)
 - [Typical example](#typical_example)
 - [Default configuration (Orange)](#default_configuration)
 - [How to test your configuration](#test_configuration)
@@ -63,19 +64,38 @@ This manipulation is needed because odhcp6c wants hexadecimal strings without ':
 
 > **Warning** : if you use `${optv4[n]}` with a option number 'n' that is NOT in the current state (i.e. not entered in Unifi's UI WAN DHCP v4 settings), then the script will immediately **FAIL**. That's intentional, there is no reason why you would need a non-existent DHCPv4 option to generate a DHCPv6 option. 
 
-Also, if needed, a `dhcpv4_hex[<opt#>]` array is available with the hexstring equivalent of a character string DHCPv4 option value (e.g. if dhcpv4[60]=sagem then dhcpv4_hex[60]=736167656D). This can be useful if the DHCP V6 option must be in hex (like DHCPv6 option 16, which is usually generated from DHCPv4 60 string value). 
+
+&nbsp;  
+
+<a id="special_settings"></a>
+
+## Other settings for the dhcpv6.conf file
+<sup>[(Back to top)](#table-of-contents)</sup>
+&nbsp;  
+
+
+If needed, a `dhcpv4_hex[<opt#>]` array is available with the hexstring equivalent of a character string DHCPv4 option value (e.g. if dhcpv4[60]=sagem then dhcpv4_hex[60]=736167656D). This can be useful if the DHCP V6 option must be in hex (like DHCPv6 option 16, which is usually generated from DHCPv4 60 string value). 
 
 Additionnaly, a `dhcpv4_hexlen[<opt#>]` array is available, as this can be useful to construct DHCPv6 options with 2-bytes length fields. 
 
 Special case : DHCPv4 option 61 (client-id) is available as both `${optv4[61]}` and as `${macaddr}`. If you have checked and entered both "MAC Adress Clone" field in Unifi UI and option 61 in "DHCP Client Options", then the latter is stored (in both variables). If not, then the one you entered is stored in both variables.   
 
-> **Warning** : DO NOT DO USE `dhcpv6_cos=n` unless you know what you do, as it will probably break the DHCP lease (and your WAN connection). In almost 100% of situations (including Orange) the default behaviour (DHCPv6 CoS copied from DHCPv4 CoS) is the correct one
+By default, dhcpv6-mod will copy the DHCPv4 CoS set in the UI to the DHCPv6 CoS option (-K) of odhcp6c, so you don't need to specify it.  
 
-Requested options from the DHCPv6 server can be overriden, default is 11,17,23,24 :
+> So, even if a `dhcpv6_cos=n` option is available, DO NOT USE IT unless you know what you do, as it will probably break the DHCP lease (and your WAN connection). The reason : in almost 100% of situations (including Orange) the default behaviour is the correct one (DHCPv6 CoS copied from DHCPv4 CoS) 
+
+Option 6 (ORO, Option Requested options) to request from the DHCPv6 server can be overriden, default is "17,23,24" :
 ```bash
-dhcpv6_request_options=11,17,23,24      # default should work, don't use that setting if no need
+dhcpv6_request_options=17,23,24    # default, works for Orange, don't use that setting if you don't need to
 ```
- 
+This is : Vendor specific infos (17) + DNS servers (23) + Domain search list (24)
+
+The other options sent to odhcp6c command line are, by default, "-a -f -R". If you want to change that for your ISP :
+```bash
+odhcp6c_options="-a -f -R"         # default, works for Orange, don't use that setting if you don't need to
+```
+This is : deactivate support for reconfigure opcode (-a), deactivate sending hostname (-f), deactivate requesting option not specified in -r (which are specified with dhcpv6_request_options).
+
 &nbsp;  
 
 <a id="typical_example"></a>
@@ -226,7 +246,7 @@ Generated DHCPv6 option 11 (authentication) : value=01020... (length 62) odhcp6c
 Generated DHCPv6 option 15 (userclass) : value=FSVDS... (length 43) odhcp6cOption=-u
 Generated DHCPv6 option 16 (vendorclass) : value=00000... (length 22) odhcp6cOption=-V
 Successfully generated 4 DHCP v6 options using ./test-files/dhcpv6.conf
--a -f -R -r11,17,23,24 -K6 -c 000300010123456789AB -x 11:0102030405060708090A0B0C0D0E0F10 -u FSVDSL_livebox.Internet.softathome.Livebox3 -V 0000040E0005736167656D test
+-a -f -R -r17,23,24 -K6 -c 000300010123456789AB -x 11:0102030405060708090A0B0C0D0E0F10 -u FSVDSL_livebox.Internet.softathome.Livebox3 -V 0000040E0005736167656D test
 ````
 
 The last line shows the options that would be passed to `odhcp6c`

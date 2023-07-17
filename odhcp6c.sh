@@ -24,7 +24,11 @@ DHCPV6_CONF=/data/local/etc/dhcpv6.conf                             # Customized
 DEFAULT_DHCPV6_CONF=/data/dhcpv6-mod/dhcpv6-orange.conf             # Otherwise will take Orange conf
 DHCP6C_SUPPORTED_OPTIONS=/data/dhcpv6-mod/supported-options.json    # Which DHCPv6 options are possible
 
-dhcpv6_cos=                             # default : don't pass -K<class-of-service> to odhcp6c, otherwise set it in dhcpv6.conf
+default_dhcpv6_request_options="17,23,24"           # Default requested options (values for Orange), can be overriden in dhcpv6.conf
+
+# -a deactivates support for reconfigure opcode, -f deactivates sending hostname, 
+# -R deactivates requesting option not specified in -r (which are specified with [default_]dhcpv6_request_options)
+default_odhcp6c_options="-a -f -R"      # Default basic odhcp6c cmd options   
 
 org_odhcp6c=/usr/sbin/odhcp6c-org       # We have renamed original to -org
 new_odhcp6c=/data/local/bin/odhcp6c     # Updated exec (replaces Unifi's old odhcp6c), will be "exec" at the end of this script
@@ -148,14 +152,20 @@ set +u
 # Supported DHCPv6 options of odhcp6c
 supported_options_json=$(cat $DHCP6C_SUPPORTED_OPTIONS | jq -r '.supportedOptions[]')
 
-# -a deactivates support for reconfigure opcode
-# -f deactivates sending hostname
-# -R deactivates requesting option not specified in -r
-odhcp6c_opts="-a -f -R"
+# Initialize odhcp6c_opts with minimum options for odhcp6c cmd
+if [[ -z "${odhcp6c_options}" ]]; then
+    odhcp6c_options="${default_odhcp6c_options}"  # see at the top of this script for the default
+else
+    echo "$HDR" $(colorYellow "NOTE:") "odhcp6c_options default overriden to ${odhcp6c_options}"
+fi
+odhcp6c_opts="${default_odhcp6c_options}"
 
 # -r argument : requested opts from DHCP server, comma-separated
-[[ -z "${dhcpv6_request_options}" ]] && dhcpv6_request_options="11,17,23,24" || \
-    echo "$HDR" $(colorYellow "NOTE:") "dhcpv6_request_options default overrriden to ${dhcpv6_request_options}"
+if [[ -z "${dhcpv6_request_options}" ]]; then
+    dhcpv6_request_options="${default_dhcpv6_request_options}"  # see at the top of this script for the default
+else
+    echo "$HDR" $(colorYellow "NOTE:") "dhcpv6_request_options default overriden to ${dhcpv6_request_options}"
+fi
 odhcp6c_opts="${odhcp6c_opts} -r${dhcpv6_request_options}"
 
 # Set DHCPv6 CoS, to same as DHCPv4 CoS except if user specified a different value dhcpv6_cos (should not happen...)
