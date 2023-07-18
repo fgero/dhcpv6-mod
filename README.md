@@ -16,7 +16,7 @@ In addition, it is highly recommended that you install the `udm-boot` package in
 &nbsp;  
 &nbsp;  
 
-> **IMPORTANT**:
+> **WARNING**
 > For existing users, after any update of this repo *or of your config file*, please don't forget to run the `./install-dhcpv6-mod.sh` command again (see [Install or update dhcpv6-mod](#install_dhcpv6_mod)).
 
 &nbsp;  
@@ -173,7 +173,7 @@ In the UI, go to Network > Settings > Internet > Primary (WAN1)
 
 You must already have set VLAN ID (832 for Orange), DHCP client options (V4) 60/77/90, DHCP CoS 6.
 
-Now you need to set "IPv6 Connection" to "DHCPv6" (instead of Disabled) and "Prefix Delegation Size" to 56 (instead of 64), like so :
+Now you need to set `IPv6 Connection` to `DHCPv6` (instead of Disabled) and `Prefix Delegation Size` to `56` (instead of 64), like so :
 
 ![IPv6 WAN settings](https://github.com/fgero/dhcpv6-mod/blob/main/images/IPV6_WAN_settings.png#gh-dark-mode-only)
 ![IPv6 WAN settings](https://github.com/fgero/dhcpv6-mod/blob/main/images/IPV6_WAN_settings_light.png#gh-light-mode-only)
@@ -239,15 +239,20 @@ Even after getting a V6 lease, your WAN interface will not get a public IPV6 add
 
 If you want to use IPV6 also within your LAN, *or even just to test IPv6 connectivity*, you must configure your Networks in the UI (at least the Default Network) with `IPv6 Interface Type` set to `Prefix Delegation` instead of None.
 
-> **WARNING** As a first step I would do that only on the `Default` Network,  leave `Router Advertisment (RA)` **disabled**, and test connectivity using SSH from UDR :
+> **WARNING** 
+> As a first step I strongly suggest to only change the Default Network and leave unchecked `Router Advertisment (RA)` (**disabled**)
+
+Then, after a few seconds, you can check if the main bridge (br0) got an IPv6 address, and test WAN IPv6 connectivity from the UDR/UDM :
 
 ```console
-#
+# ip -6 addr show scope global dynamic
+47: br0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP qlen 1000
+    inet6 2a01:xxxx:xxx:xxxx::1/64 scope global dynamic
+       valid_lft 541988sec preferred_lft 541988sec
 # ping -6 google.com
 PING google.com(par10s22-in-x0e.1e100.net (2a00:1450:4007:80e::200e)) 56 data bytes
 64 bytes from par10s22-in-x0e.1e100.net (2a00:1450:4007:80e::200e): icmp_seq=1 ttl=117 time=2.38 ms
 (...)
-#
 # curl -6 ipv6.google.com -I
 HTTP/1.1 200 OK
 (...)
@@ -260,7 +265,9 @@ HTTP/1.1 200 OK
 
 ### [OPTIONAL] Fully activate IPV6 on your LAN (Router Advertisment)
 
-Later, optionnaly, set `Router Advertisment (RA)` to Enabled on the Networks you want to let devices dynamically get IPv6 addresses (leave the rest as default).
+In the previous section, you already have set `IPv6 Interface Type` to `Prefix Delegation`, but with RA disabled, and you could validate the WAN IPv6 connectivity.
+
+Next, you can *optionnaly* check `Router Advertisment (RA)` (Enabled) for some Network(s) when you want to let devices dynamically get IPv6 addresses.
 
 NOTE: this can lead to issues in some use cases, depending on your LAN and WLAN devices configurations...you'll have to carefully test everything.
 
@@ -331,8 +338,9 @@ grep -sq '^prefer-family' /root/.wgetrc || echo 'prefer-family = IPv4' >> /root/
 <sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;  
 
-In the UI, go to Network > Settings > Internet > Primary (WAN1)
-Set "IPv6 Connection" to "Disabled" (instead of DHCPv6)
+In the UI, go to Network > Settings > Internet > Primary (WAN1), and set "IPv6 Connection" to "Disabled" (instead of DHCPv6).
+
+Do the same with any Network for which you have enabled "IPv6 Interface Type" to any other than "Disabled". 
 
 Then, the odhcp6c process should stop within a few seconds.
 
