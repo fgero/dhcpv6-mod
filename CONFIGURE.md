@@ -6,7 +6,7 @@ If you are using Orange France, then you don't need to update `/data/local/etc/d
 
 If you are not using Orange France, your ISP has probably different requirements, so you can customize how dhcpv6-mod generates the DHCP V6 options, and for that you need to update the configuration file located in `/data/local/etc/dhcpv6.conf`. 
 
-> **WARNING** : no NOT modify `/data/dhcpv6-mod/dhcpv6-orange.conf`, only use `/data/local/etc/dhcpv6.conf` if you want to provide your own DHCPv6 options.
+> **Warning** Do no NOT modify `/data/dhcpv6-mod/dhcpv6-orange.conf`, only use `/data/local/etc/dhcpv6.conf` if you want to provide your own DHCPv6 options.
 
 ## Table of Contents
 

@@ -16,7 +16,7 @@ In addition, it is highly recommended that you install the `udm-boot` package in
 &nbsp;  
 &nbsp;  
 
-> **WARNING**
+> **Warning**
 > For existing users, after any update of this repo *or of your config file*, please don't forget to run the `./install-dhcpv6-mod.sh` command again (see [Install or update dhcpv6-mod](#install_dhcpv6_mod)).
 
 &nbsp;  
@@ -45,13 +45,13 @@ In addition, it is highly recommended that you install the `udm-boot` package in
 
 As a prerequisite, you must have entered the needed DHCP V4 WAN options (for Orange : 60, 61, 77 and 90), using Unifi's GUI WAN1 settings, as they are needed to generate V6 options. 
 
-Then :
-- From the UDR/UDM shell prompt, build a more recent version of `odhcp6c` (from [openwrt repo](https://github.com/openwrt/odhcp6c)) that has the `-K` option in order to pass a CoS for DHCP requests
+Then we will :
+- Build a more recent version of `odhcp6c` (from [openwrt repo](https://github.com/openwrt/odhcp6c)) that has the `-K` option in order to pass a CoS for DHCP requests
 - Replace Unifi's `/usr/sbin/odhcp6c` by our own shell script `odhcp6c.sh`, which will :
   - fetch the DHCPv4 options values from `ubios-udapi-server` state file
-  - prepare the DHCPv6 options with needed prefixes and formats, according to a customizable configuration file 
+  - prepare the DHCPv6 options with required formats, customizable via a configuration file 
   - finally, `exec` the new `/data/local/bin/odhcp6c` (the one we just built), with all the adequate options
-- In addition, install our own `udm-boot` Debian package (and systemd service) that will re-apply dhcpv6-mod even after a Unifi OS firmware update 
+- Install our own `udm-boot` Debian package (and systemd service) that will re-apply dhcpv6-mod even after a Unifi OS firmware update 
 
 &nbsp;  
 &nbsp;  
@@ -85,10 +85,11 @@ Check that our new odhcp6c supports the CoS option (the line with '-K' should be
 	-K <sk-prio>	Set packet kernel priority (0)
 ```
 
-[OPTIONAL] You can delete the source code (not needed for our purpose) :
-```bash
-rm -rf /root/odhcp6c
-```
+> [OPTIONAL] You can delete the source code (not needed for our purpose) :
+> ```bash
+> rm -rf /root/odhcp6c
+> ```
+
 
 &nbsp;  
 &nbsp;  
@@ -150,7 +151,8 @@ This command must be issued :
 - when you update your configuration file (`/data/local/etc/dhcpv6.conf`)
 - after a firmware update if our [udm-boot package](#install_udm_boot) is not installed
 
-NOTE : the command will initially create the `/data/local/etc/dhcpv6.conf` configuration file <u>ONLY if it does not already exist</u>, using the `dhcpv6-orange.conf` file content.
+> **Note**
+> the command will initially create the `/data/local/etc/dhcpv6.conf` configuration file <u>ONLY if it does not already exist</u>, using the `dhcpv6-orange.conf` file content.
 
 In fact, the `./install-dhcpv6-mod.sh` command can be run at any time : it will only update `/usr/sbin/odhcp6c` with a new version of `odhcp6c.sh` if one of the following is true :
 - file `/usr/sbin/odhcp6c` is older than `odhcp6c.sh` 
@@ -175,8 +177,8 @@ You must already have set VLAN ID (832 for Orange), DHCP client options (V4) 60/
 
 Now you need to set `IPv6 Connection` to `DHCPv6` (instead of Disabled) and `Prefix Delegation Size` to `56` (instead of 64), like so :
 
-![IPv6 WAN settings](https://github.com/fgero/dhcpv6-mod/blob/main/images/IPV6_WAN_settings.png#gh-dark-mode-only)
-![IPv6 WAN settings](https://github.com/fgero/dhcpv6-mod/blob/main/images/IPV6_WAN_settings_light.png#gh-light-mode-only)
+![IPv6 WAN settings](images/IPV6_WAN_settings.png#gh-dark-mode-only)
+![IPv6 WAN settings](images/IPV6_WAN_settings_light.png#gh-light-mode-only)
 
 Then, the ubios-udapi-server process should fork, in addition to udhcpc (V4 client), a new process running our own odhcp6c with all the parameters passed, like so :
 
@@ -198,9 +200,13 @@ root     2574252    4134  0 Jun18 ?        00:00:00 /data/local/bin/odhcp6c -a -
 
 You can check the DHCP V6 discover process and lease in the system log :
 
+```bash
+grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log
+```
+<details open><summary><code>Expected output</code> (click to expand)</summary><br/>
+
 ```console
-# grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log
-(....below some extracts, you'll get more....)
+(...)
 2023-06-18T17:01:51+02:00 UDR odhcp6c[2574252]: Starting SOLICIT transaction (timeout 4294967295s, max rc 0)
 2023-06-18T17:01:51+02:00 UDR odhcp6c[2574252]: Got a valid ADVERTISE after 10ms
 2023-06-18T17:01:51+02:00 UDR odhcp6c[2574252]: IA_PD 0001 T1 87555 T2 483840
@@ -218,8 +224,9 @@ You can check the DHCP V6 discover process and lease in the system log :
 2023-06-18T17:02:04+02:00 UDR ubios-udapi-server[2574251]: udhcpc: lease of 90.XX.XX.XXX obtained from 80.10.239.9, lease time 604800
 (...)
 ```
+</details><br>
 
-Here you asked and got a /56 prefix (7 bytes), like [2a01:xxxx:xxx:xx](#)00:, and the 8th byte (00) is reserved by your router/box, you can use 01 to FF (254 subnets of /64) 
+In that output you asked and got a /56 prefix (7 bytes), like [2a01:xxxx:xxx:xx](#)00:, and the 8th byte (00) is reserved by your router/box, you can use 01 to FF (254 subnets of /64) 
 
 If this does not work, you can try to reset both DHCP v4 and v6 sequences :
 
@@ -239,7 +246,7 @@ Even after getting a V6 lease, your WAN interface will not get a public IPV6 add
 
 If you want to use IPV6 also within your LAN, *or even just to test IPv6 connectivity*, you must configure your Networks in the UI (at least the Default Network) with `IPv6 Interface Type` set to `Prefix Delegation` instead of None.
 
-> **WARNING** 
+> **Warning** 
 > As a first step I strongly suggest to only change the Default Network and leave unchecked `Router Advertisment (RA)` (**disabled**)
 
 Then, after a few seconds, you can check if the main bridge (br0) got an IPv6 address, and test WAN IPv6 connectivity from the UDR/UDM :
@@ -269,10 +276,10 @@ In the previous section, you already have set `IPv6 Interface Type` to `Prefix D
 
 Next, you can *optionnaly* check `Router Advertisment (RA)` (Enabled) for some Network(s) when you want to let devices dynamically get IPv6 addresses.
 
-NOTE: this can lead to issues in some use cases, depending on your LAN and WLAN devices configurations...you'll have to carefully test everything.
+> **Note** This can lead to issues in some use cases, depending on your LAN and WLAN devices configurations...you'll have to carefully test everything.
 
-![IPv6 LAN settings](https://github.com/fgero/dhcpv6-mod/blob/main/images/IPV6_LAN_settings.png#gh-dark-mode-only)
-![IPv6 LAN settings](https://github.com/fgero/dhcpv6-mod/blob/main/images/IPV6_LAN_settings_light.png#gh-light-mode-only)
+![IPv6 LAN settings](images/IPV6_LAN_settings.png#gh-dark-mode-only)
+![IPv6 LAN settings](images/IPV6_LAN_settings_light.png#gh-light-mode-only)
 
 &nbsp;  
 &nbsp;  
