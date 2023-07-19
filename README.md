@@ -4,9 +4,7 @@
 > If you're not using Orange France ISP, it's now possible to configure your own DHCPv6 options (see the [Initialize DHCPv6 config file](#configure_dhcpv6) section).
 
 > **Warning** since July 19th 2023 :
-> I have definitely given up trying to automaticaly re-install the mod after UnifiOS firmware updates boots, udm-boot package does not work
-> So, you must exec the ./install-dhcpv6-mod.sh after a firmware update in order for dhcpv6 to work again
-> Note that, for "normal" reboots of UDM/UDR, the mod is kept, nothing to do
+> I have definitely given up trying to automaticaly re-install the mod after UnifiOS firmware update boots, udm-boot package does not work, you must exec `./install-dhcpv6-mod.sh` in order for dhcpv6 to work again. Note that, for "normal" reboots (no FW), the mod is kept, nothing to do. 
 
 This project enables Unifi UDM/UDR to provide required DHCP V6 client options to ISPs (like Orange France), including by extracting values from V4 DHCP client options  you've already set in Unifi UI.
 
@@ -17,13 +15,7 @@ It should work on any UDM/UDMPro/UDR with at least UnifiOS 2.4.x (3.x is recomme
 For Orange France, or any other ISP that requires a non-zero CoS for DHCP requests, you need to be in **UnifiOS 3.1.12 at least** (because [DHCP v4 renew was not working](https://community.ui.com/questions/Automatic-renew-at-mid-life-of-WAN-DHCPv4-lease-does-not-work-no-CoS-set-in-unicast-renew-UDR-is-di/df07d8aa-54e4-4f8e-b171-01b876a19aec) before this release)
 
 > **Warning**
-
-
-&nbsp;  
-&nbsp;  
-
-> **Warning**
-> For existing users, after any update of this repo *or of your config file*, please don't forget to run the `./install-dhcpv6-mod.sh` command again (see [Install or update dhcpv6-mod](#install_dhcpv6_mod)).
+> For existing users, after any update of this repo *or of your config file*, or after a firmware update, please don't forget to run the `./install-dhcpv6-mod.sh` command again (see [Install or update dhcpv6-mod](#install_dhcpv6_mod)).
 
 &nbsp;  
 &nbsp;  
