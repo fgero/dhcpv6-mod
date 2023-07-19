@@ -1,3 +1,5 @@
+#!/bin/bash
+
 ########################################################################
 #
 # This script shoud be placed in /data/on_boot.d, and needs udm-boot

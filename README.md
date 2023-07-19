@@ -3,6 +3,11 @@
 > **NEW** since July 17th, 2023 :
 > If you're not using Orange France ISP, it's now possible to configure your own DHCPv6 options (see the [Initialize DHCPv6 config file](#configure_dhcpv6) section).
 
+> **Warning** since July 19th 2023 :
+> I have definitely given up trying to automaticaly re-install the mod after UnifiOS firmware updates boots, udm-boot package does not work
+> So, you must exec the ./install-dhcpv6-mod.sh after a firmware update in order for dhcpv6 to work again
+> Note that, for "normal" reboots of UDM/UDR, the mod is kept, nothing to do
+
 This project enables Unifi UDM/UDR to provide required DHCP V6 client options to ISPs (like Orange France), including by extracting values from V4 DHCP client options  you've already set in Unifi UI.
 
 This mod was developed because there's no way to configure DHCP v6 client options in the WAN section of Unifi's UI. 
@@ -11,7 +16,8 @@ It should work on any UDM/UDMPro/UDR with at least UnifiOS 2.4.x (3.x is recomme
 
 For Orange France, or any other ISP that requires a non-zero CoS for DHCP requests, you need to be in **UnifiOS 3.1.12 at least** (because [DHCP v4 renew was not working](https://community.ui.com/questions/Automatic-renew-at-mid-life-of-WAN-DHCPv4-lease-does-not-work-no-CoS-set-in-unicast-renew-UDR-is-di/df07d8aa-54e4-4f8e-b171-01b876a19aec) before this release)
 
-In addition, it is highly recommended that you install the `udm-boot` package included in this repo, so that the mod will be automaticaly re-applied after a reboot, even after Unifi OS firmware updates.
+> **Warning**
+
 
 &nbsp;  
 &nbsp;  
@@ -32,7 +38,6 @@ In addition, it is highly recommended that you install the `udm-boot` package in
 - [Install (or update) dhcpv6-mod](#install_dhcpv6_mod)
 - [Activate DHCPv6 WAN client](#activate_dhcpv6)
 - [Check IPv6 lease and connectivity](#check_ipv6)
-- [Install udm-boot package](#install_udm_boot)
 - [Rollback (if needed)](#rollback)
 &nbsp;  
 &nbsp;  
@@ -51,7 +56,7 @@ Then we will :
   - fetch the DHCPv4 options values from `ubios-udapi-server` state file
   - prepare the DHCPv6 options with required formats, customizable via a configuration file 
   - finally, `exec` the new `/data/local/bin/odhcp6c` (the one we just built), with all the adequate options
-- Install our own `udm-boot` Debian package (and systemd service) that will re-apply dhcpv6-mod even after a Unifi OS firmware update 
+
 
 &nbsp;  
 &nbsp;  
@@ -100,7 +105,7 @@ Check that our new odhcp6c supports the CoS option (the line with '-K' should be
 <sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;  
 
-Install the repo files in the `/data/dhcpv6-mod` directory (/data is persisted after reboots/upgrades).
+Install the repo files in the `/data/dhcpv6-mod` directory (/data is persisted after reboots including firmwares upgrades).
 
 You can either use `git` to clone this repo (**recommended**) :
 ```bash
@@ -149,7 +154,7 @@ This command must be issued :
 - when installing `dhcpv6-mod` for the first time
 - when `dhcpv6-mod` repository gets an update (except if limited to documentation)
 - when you update your configuration file (`/data/local/etc/dhcpv6.conf`)
-- after a firmware update if our [udm-boot package](#install_udm_boot) is not installed
+- after a **firmware update reboot** (not a normal reboot, which does not uninstall dhcpv6-mod)
 
 > **Note**
 > the command will initially create the `/data/local/etc/dhcpv6.conf` configuration file <u>ONLY if it does not already exist</u>, using the `dhcpv6-orange.conf` file content.
@@ -203,26 +208,51 @@ You can check the DHCP V6 discover process and lease in the system log :
 ```bash
 grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log
 ```
-<details open><summary><code>Expected output</code> (click to expand)</summary><br/>
+<details close><summary><code>Expected output</code> (click to expand)</summary><br/>
 
 ```console
-(...)
-2023-06-18T17:01:51+02:00 UDR odhcp6c[2574252]: Starting SOLICIT transaction (timeout 4294967295s, max rc 0)
-2023-06-18T17:01:51+02:00 UDR odhcp6c[2574252]: Got a valid ADVERTISE after 10ms
-2023-06-18T17:01:51+02:00 UDR odhcp6c[2574252]: IA_PD 0001 T1 87555 T2 483840
-2023-06-18T17:01:51+02:00 UDR odhcp6c[2574252]: 2a01:xxxx:xxx:xxxx::/56 preferred 604800 valid 604800
-2023-06-18T17:01:52+02:00 UDR odhcp6c[2574252]: Starting REQUEST transaction (timeout 4294967295s, max rc 10)
-2023-06-18T17:01:52+02:00 UDR odhcp6c[2574252]: Send REQUEST message (elapsed 0ms, rc 0)
-2023-06-18T17:01:52+02:00 UDR odhcp6c[2574252]: Got a valid REPLY after 231ms
-2023-06-18T17:01:52+02:00 UDR odhcp6c[2574252]: IA_PD 0001 T1 87555 T2 483840
-2023-06-18T17:01:52+02:00 UDR odhcp6c[2574252]: 2a01:xxxx:xxx:xxxx::/56 preferred 604800 valid 604800
-2023-06-18T17:01:52+02:00 UDR odhcp6c[2574252]: T1 87555s, T2 483840s, T3 604800s
-2023-06-18T17:01:52+02:00 UDR odhcp6c[2574252]: entering stateful-mode on eth4.832
-2023-06-18T17:01:52+02:00 UDR odhcp6c[2574252]: Starting <POLL> transaction (timeout 87555s, max rc 0)
-(...)
-2023-06-18T17:02:04+02:00 UDR ubios-udapi-server[2574251]: udhcpc: broadcasting select for 90.XX.XX.XXX, server 80.10.239.9
-2023-06-18T17:02:04+02:00 UDR ubios-udapi-server[2574251]: udhcpc: lease of 90.XX.XX.XXX obtained from 80.10.239.9, lease time 604800
-(...)
+2023-07-17T15:45:26+02:00 UDR odhcp6c[2540864]: Starting RELEASE transaction (timeout 4294967295s, max rc 5)
+2023-07-17T15:45:26+02:00 UDR odhcp6c[2540864]: Send RELEASE message (elapsed 0ms, rc 0)
+2023-07-17T15:45:26+02:00 UDR ubios-udapi-server[2540863]: udhcpc: received SIGTERM
+2023-07-17T15:45:26+02:00 UDR ubios-udapi-server[3018621]: udhcpc: started, v1.34.1
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Selected DHCPv6 client executable (with support for CoS) : /data/local/bin/odhcp6c
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Found ubios-udapi-server JSON config in /data/udapi-config/ubios-udapi-server/ubios-udapi-server.state
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Fetched DHCPv4 option 60 : length=5 value=s...m
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Fetched DHCPv4 option 77 : length=43 value=FSVDS...ebox3
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Fetched DHCPv4 option 90 : length=140 value=00000...xxxxx
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Fetched MAC Address Clone : length=12
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Fetched DHCPv4 CoS of 6
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Found dhcp6c options file /data/local/etc/dhcpv6.conf
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Generated DHCPv6 CoS of 6 (default is to set to the same value as DHCPv4 CoS)
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Generated DHCPv6 option 1 : length=20 value=0003...xxxx (clientid, -c )
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018621]: udhcpc: broadcasting discover
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018763]: [info ] ubios-dhcpc-decline-script: DHCP offer 90.xx.xx.xxx/21 on interface eth4.832, gateway: 90.xx.xx.1
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Generated DHCPv6 option 11 : length=140 value=00000...xxxxx (authentication, -x 11:)
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018763]: [info ] ubios-dhcpc-decline-script: DHCP offer 90.xx.xx.xxx/21 accepted
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018621]: udhcpc: broadcasting select for 90.xx.xx.xxx, server 80.xx.xxx.x
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Generated DHCPv6 option 15 : length=43 value=FSVDS...ebox3 (userclass, -u )
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Generated DHCPv6 option 16 : length=22 value=00000...7656D (vendorclass, -V )
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Successfully generated 4 DHCPv6 options using /data/local/etc/dhcpv6.conf
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Launching exec /data/local/bin/odhcp6c -a -f -R -r17,23,24 -K6 -c 0003...xxxx -x 11:00000...xxxxx -u FSVDS...ebox3 -V 00000...7656D  -v -s /usr/share/ubios-udapi-server/ubios-odhcp6c-script -D -P 56 eth4.832
+2023-07-17T15:45:27+02:00 UDR odhcp6c[3018622]: (re)starting transaction on eth4.832
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018621]: udhcpc: lease of 90.xx.xx.xxx obtained from 80.xx.xxx.x, lease time 604800
+2023-07-17T15:45:28+02:00 UDR odhcp6c[3018622]: Starting SOLICIT transaction (timeout 4294967295s, max rc 0)
+2023-07-17T15:45:28+02:00 UDR odhcp6c[3018622]: Got a valid ADVERTISE after 13ms
+2023-07-17T15:45:28+02:00 UDR odhcp6c[3018622]: IA_NA 0001 T1 0 T2 0
+2023-07-17T15:45:28+02:00 UDR odhcp6c[3018622]: IA_PD 0001 T1 84672 T2 483840
+2023-07-17T15:45:28+02:00 UDR odhcp6c[3018622]: 2a01:xxxx:xxx:xxxx::/56 preferred 604800 valid 604800
+2023-07-17T15:45:30+02:00 UDR odhcp6c[3018622]: Starting SOLICIT transaction (timeout 4294967295s, max rc 0)
+2023-07-17T15:45:30+02:00 UDR odhcp6c[3018622]: Got a valid ADVERTISE after 10ms
+2023-07-17T15:45:30+02:00 UDR odhcp6c[3018622]: IA_PD 0001 T1 84672 T2 483840
+2023-07-17T15:45:30+02:00 UDR odhcp6c[3018622]: 2a01:xxxx:xxx:xxxx::/56 preferred 604800 valid 604800
+2023-07-17T15:45:31+02:00 UDR odhcp6c[3018622]: Starting REQUEST transaction (timeout 4294967295s, max rc 10)
+2023-07-17T15:45:31+02:00 UDR odhcp6c[3018622]: Send REQUEST message (elapsed 0ms, rc 0)
+2023-07-17T15:45:31+02:00 UDR odhcp6c[3018622]: Got a valid REPLY after 124ms
+2023-07-17T15:45:31+02:00 UDR odhcp6c[3018622]: IA_PD 0001 T1 84672 T2 483840
+2023-07-17T15:45:31+02:00 UDR odhcp6c[3018622]: 2a01:xxxx:xxx:xxxx::/56 preferred 604800 valid 604800
+2023-07-17T15:45:31+02:00 UDR odhcp6c[3018622]: T1 84672s, T2 483840s, T3 604800s
+2023-07-17T15:45:31+02:00 UDR odhcp6c[3018622]: entering stateful-mode on eth4.832
+2023-07-17T15:45:31+02:00 UDR odhcp6c[3018622]: Starting <POLL> transaction (timeout 84672s, max rc 0)
 ```
 </details><br>
 
@@ -236,7 +266,7 @@ killall udhcpc odhcp6c
 grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log
 ```
 
-If you need to only check the log generated by odhcp6c.sh, in order to see DHCPv6 option generation :
+If you need to just check the log generated by odhcp6c.sh, in order to see DHCPv6 option generation :
 ```bash
 grep dhcpv6-mod /var/log/daemon.log 
 ```
@@ -282,40 +312,7 @@ Next, you can *optionnaly* check `Router Advertisment (RA)` (Enabled) for some N
 ![IPv6 LAN settings](images/IPV6_LAN_settings_light.png#gh-light-mode-only)
 
 &nbsp;  
-&nbsp;  
-
-<a id="install_udm_boot"></a>
-
-## Install udm-boot
-<sup>[(Back to top)](#table-of-contents)</sup>
-&nbsp;  
-
-It the V6 lease is OK, then you must ensure that our odhcp6c hack is maintained even after a reboot.
-You could do that using [these instructions](https://github.com/unifi-utilities/unifios-utilities/tree/main/on-boot-script-2.x#manually-install-steps), from the official unifios-utilities repo, but this does not survive a firmware update (see issue [#1](https://github.com/fgero/dhcpv6-mod/issues/1)).
-
-So I would suggest to use our own installation script :
-
-```bash
-cd /data/dhcpv6-mod/udm-boot
-./install_udm_boot.sh
-```
-
-This will add the `udm-boot` package (provided as a `.deb` file in this repo) to the `ubnt-dpkg-cache` facility, so that it is restored if missing after a firmware update reboot.
-The package itself, when installed, puts the `udm-boot.service` file in `/lib/systemd/system/udm-boot.service` and enable+start the udm-boot service with systemctl.
-
-Then you can add ".sh" files in the `/data/on_boot.d/` directory so that they are executed at boot (for dhcpv6-mod purposes or any other...).
-
-In our case, we need to replace at each reboot the old /usr/sbin/odhcp6c executable (that is automatically restored by Unifi each time) by our dhcpv6-mod script. 
-
-For that, we need to create a symlink `05-replace-odhcp6c.sh` pointing to the real script in `udm-boot/` :
-
-```bash
-mkdir -p /data/on_boot.d
-ln -fs /data/dhcpv6-mod/udm-boot/05-replace-odhcp6c.sh /data/on_boot.d/05-replace-odhcp6c.sh
-```
-
-
-&nbsp;  
+&nbsp;
 
 <a id="force_firmware_update_in_V4"></a>
 

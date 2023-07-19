@@ -216,7 +216,10 @@ echo "$HDR Successfully generated ${#optv6[@]} DHCPv6 options using ${DHCPV6_CON
 arg_without_e=$(echo " $@" | sed "s/ -e//")
 
 if [[ $test_mode -eq 1 ]]; then printf "$HDR %s : " "$(colorGreen 'odhcp6c options would be')"
-else echo "$HDR" $(colorGreen "Launching exec") "${dhcp6_client} ${odhcp6c_opts_abbrev} ${arg_without_e}"
+else
+    echo "$HDR Sleeping 5 seconds before launching ${dhcp6_client}, to let udhcpc send its discover..."
+    sleep 5
+    echo "$HDR" $(colorGreen "Launching exec") "${dhcp6_client} ${odhcp6c_opts_abbrev} ${arg_without_e}"
 fi
 
 exec ${dhcp6_client} ${odhcp6c_opts} ${arg_without_e}
