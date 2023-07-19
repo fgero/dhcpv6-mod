@@ -12,10 +12,10 @@ It should work on any UDM/UDMPro/UDR with at least UnifiOS 2.4.x (3.x is recomme
 For Orange France, or any other ISP that requires a non-zero CoS for DHCP requests, you need to be in **UnifiOS 3.1.12 at least** (because [DHCP v4 renew was not working](https://community.ui.com/questions/Automatic-renew-at-mid-life-of-WAN-DHCPv4-lease-does-not-work-no-CoS-set-in-unicast-renew-UDR-is-di/df07d8aa-54e4-4f8e-b171-01b876a19aec) before this release)
 
 > **Note** 
-> I have definitely given up trying to automaticaly re-install the mod after UnifiOS firmware update boots (`udm-boot` package does not work, see [issue #1](https://github.com/fgero/dhcpv6-mod/issues/1)) 
+> I have definitely given up trying to automaticaly re-install the mod after UnifiOS firmware update boots : `udm-boot` package does not work (see [issue #1](https://github.com/fgero/dhcpv6-mod/issues/1)), you can `dpkg -r udm-boot`
 
 > **Warning**
-> After any repo commit of `odhcp6c.sh`, or if you update your config file, or after a firmware update reboot, don't forget to run the `./install-dhcpv6-mod.sh` command again (see [Install or update dhcpv6-mod](#install_dhcpv6_mod)).
+> After any non-documentation commit of this repository, or if you update your config file, or after a firmware update reboot, don't forget to run the `./install-dhcpv6-mod.sh` command again (see [Install or update dhcpv6-mod](#install_dhcpv6_mod)).
 
 &nbsp;  
 &nbsp;  
@@ -121,9 +121,9 @@ mv dhcpv6-mod-main dhcpv6-mod
 <sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;  
 
-If you are using Orange France ISP, then you may skip this section and move to the next section ([Install/update dhcpv6-mod files](#install_dhcpv6_mod)), as the installation will create the `/data/local/etc/dhcpv6.conf` config file for you, with Orange settings by default.
+If you are using Orange France ISP, then you may skip this section and move to the next one ([Install/update dhcpv6-mod files](#install_dhcpv6_mod)), as the installation script will create the `/data/local/etc/dhcpv6.conf` config file for you, with Orange settings by default.
 
-If you are NOT using Orange France ISP, the first time you install dhcpv6-mod, you must create the `/data/local/etc/dhcpv6.conf` file yourself before moving to the next section (installation).
+If you are NOT using Orange France ISP, the first time you install `dhcpv6-mod`, you must create and customize the `/data/local/etc/dhcpv6.conf` file yourself before moving to the next section (installation), which will not overwrite it.
 
 Please read the [CONFIGURE.md](CONFIGURE.md) documentation page, which describes how to create your own config file.
 
@@ -143,21 +143,19 @@ cd /data/dhcpv6-mod
 ./install-dhcpv6-mod.sh
 ```
 This command must be issued :
-- when installing `dhcpv6-mod` for the first time
-- when `dhcpv6-mod` repository gets an update (except if limited to documentation)
+- when installing `dhcpv6-mod` for the first time, of course
+- when `dhcpv6-mod` repository gets an update commit (except if limited to documentation)
 - when you update your configuration file (`/data/local/etc/dhcpv6.conf`)
 - after a **firmware update reboot** (not a normal reboot, which does not uninstall dhcpv6-mod)
 
 > **Note**
-> the command will initially create the `/data/local/etc/dhcpv6.conf` configuration file <u>ONLY if it does not already exist</u>, using the `dhcpv6-orange.conf` file content.
+> `install-dhcpv6-mod` will initially create the `/data/local/etc/dhcpv6.conf` configuration file (ONLY if it doesn't already existe), using `dhcpv6-orange.conf` file content
 
 In fact, the `./install-dhcpv6-mod.sh` command can be run at any time : it will only update `/usr/sbin/odhcp6c` with a new version of `odhcp6c.sh` if one of the following is true :
 - file `/usr/sbin/odhcp6c` is older than `odhcp6c.sh` 
 - process `odhcp6c` is older than `odhcp6c.sh` or `dhcpv6.conf`
 
-If the script did really change something, and if a DHCPv6 client process was already running, then the script will finish with a restart of both DHCP v4 and v6 clients. This will simply launch a DHCP discover phase for both (V4/V6 consistency is needed by Orange), without interrupting the WAN connection. 
-
-So, after any update that triggered a restart of DHCPv6 clients, it is advisable to [Check IPv6 lease and connectivity](#check_ipv6)
+In addition, if one of those conditions are true AND if a DHCPv6 client process was already running, then the script will finish with a restart (kill -TERM) of both DHCP v4 and v6 clients. This will simply launch a DHCP discover phase for both (V4/V6 consistency is needed by Orange), without interrupting the WAN connection. In that situation, it is advisable to [Check IPv6 lease and connectivity](#check_ipv6)
 
 &nbsp;  
 &nbsp;  
@@ -170,7 +168,8 @@ So, after any update that triggered a restart of DHCPv6 clients, it is advisable
 
 In the UI, go to Network > Settings > Internet > Primary (WAN1)
 
-You must already have set VLAN ID (832 for Orange), DHCP client options (V4) 60/77/90, DHCP CoS 6.
+For Orange, you must already have set VLAN ID (832 for Orange), DHCP client options (V4) 60/77/90, and DHCP CoS 6.
+For non-Orange ISP, you must have a working WAN IPV4 connection, with all required options set in the UI.
 
 Now you need to set `IPv6 Connection` to `DHCPv6` (instead of Disabled) and `Prefix Delegation Size` to `56` (instead of 64), like so :
 
@@ -248,9 +247,9 @@ grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log
 ```
 </details><br>
 
-In that output you asked and got a /56 prefix (7 bytes), like [2a01:xxxx:xxx:xx](#)00:, and the 8th byte (00) is reserved by your router/box, you can use 01 to FF (254 subnets of /64) 
+In that output, valid for Orange, we can see that you asked and got a /56 prefix (7 bytes), like [2a01:xxxx:xxx:xx](#)00:, and the 8th byte (00) is reserved by your router/box, you can use 01 to FF (254 subnets of /64) 
 
-If this does not work, you can try to reset both DHCP v4 and v6 sequences :
+If this does not work, you can try to reset both DHCP v4 and v6 sequences, and look for the result again :
 
 ```bash
 killall udhcpc odhcp6c 
@@ -258,20 +257,20 @@ killall udhcpc odhcp6c
 grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log
 ```
 
-If you need to just check the log generated by odhcp6c.sh, in order to see DHCPv6 option generation :
+If you just need to check the log generated by odhcp6c.sh, in order to see DHCPv6 option generation :
 ```bash
 grep dhcpv6-mod /var/log/daemon.log 
 ```
 &nbsp;
 
-Even after getting a V6 lease, your WAN interface will not get a public IPV6 address, this is expected (apparently) in a V4+V6 (double stack) situation. And ping -6 will not work.
+Even after getting a V6 lease, your WAN interface will not get a public IPV6 address, this is expected (apparently) in a V4+V6 (double stack) situation. And ping -6 will not work unless you do the following :
 
 If you want to use IPV6 also within your LAN, *or even just to test IPv6 connectivity*, you must configure your Networks in the UI (at least the Default Network) with `IPv6 Interface Type` set to `Prefix Delegation` instead of None.
 
 > **Warning** 
-> As a first step I strongly suggest to only change the Default Network and leave unchecked `Router Advertisment (RA)` (**disabled**)
+> As a first step I strongly suggest to only change the Default Network and leave unchecked `Router Advertisment (RA)` (ie. disabled), this is probably safer
 
-Then, after a few seconds, you can check if the main bridge (br0) got an IPv6 address, and test WAN IPv6 connectivity from the UDR/UDM :
+Then, if you do that, after a few seconds, you can check if the main bridge (br0) got an IPv6 address, and test WAN IPv6 connectivity from the UDR/UDM :
 
 ```console
 # ip -6 addr show scope global dynamic
@@ -296,9 +295,9 @@ HTTP/1.1 200 OK
 
 In the previous section, you already have set `IPv6 Interface Type` to `Prefix Delegation`, but with RA disabled, and you could validate the WAN IPv6 connectivity.
 
-Next, you can *optionnaly* check `Router Advertisment (RA)` (Enabled) for some Network(s) when you want to let devices dynamically get IPv6 addresses.
+Next, you can *optionnaly* check `Router Advertisment (RA)` (so enable RA) for some Network(s) when you want devices to dynamically get IPv6 addresses.
 
-> **Note** This can lead to issues in some use cases, depending on your LAN and WLAN devices configurations...you'll have to carefully test everything.
+> **Note** This can lead to issues in some use cases, depending on your LAN and WLAN devices configurations...you'll have to carefully test everything
 
 ![IPv6 LAN settings](images/IPV6_LAN_settings.png#gh-dark-mode-only)
 ![IPv6 LAN settings](images/IPV6_LAN_settings_light.png#gh-light-mode-only)
@@ -314,12 +313,13 @@ Next, you can *optionnaly* check `Router Advertisment (RA)` (Enabled) for some N
 
 When you update your applications from Unifi UI, `wget` commands are launched in the background, to download the new firmware binaries.
 
-Unfortunately, as of July 2023 at least, the IPV6 endpoints of `fw-download.ubnt.com` are unreachable.
-And, as Unifi does not use `wget` options like `--connect-timeout=01` or the `--prefer-family=IPv4`, the default is to try the first adress returned by the DNS resolver, which is IPV6 in our case, and never timeout.
+Unfortunately, as of July 2023 at least, Unifi's IPV6 endpoints for `fw-download.ubnt.com` are unreachable.
+And, as Unifi does not use `wget` options like `--connect-timeout=10` or the `--prefer-family=IPv4`, the default is to try the first adress returned by the DNS resolver, which is IPV6 in our case, and this will wait forever and not perform the desired update
 
 So we need to use the `.wgetrc` file to change the default behaviour of `wget` commands (until Unifi does something)
 
-(NOTE : if you used the `install-dhcpv6-mod.sh` script to install, as you should have, then it's already done for you, this is for information or check)
+> **Note**
+> If you used the `install-dhcpv6-mod.sh` script to install, as you should have, then the fix is already done for you, this is for information or check)
 
 ```bash
 grep -sq '^prefer-family' /root/.wgetrc || echo 'prefer-family = IPv4' >> /root/.wgetrc
@@ -339,7 +339,5 @@ In the UI, go to Network > Settings > Internet > Primary (WAN1), and set "IPv6 C
 Do the same with any Network for which you have enabled "IPv6 Interface Type" to any other than "Disabled". 
 
 Then, the odhcp6c process should stop within a few seconds.
-
-Also deactivate IPv6 in LAN if you have set that.
 
 You can reactivate it later by changing the same setting to "DHCPv6". 
