@@ -34,7 +34,7 @@ if [[ $? -eq 0 ]]; then
     echo "$HDR You can now check dhcp client logs with :"
     echo "grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log"
 else
-    echo "$HDR $(colorYellow) 'NOTE:') DHCPv6 (odhcp6c) client not running"
+    echo "$HDR $(colorYellow 'NOTE:') DHCPv6 (odhcp6c) client not running"
     echo "$HDR $(colorGreen 'Restarting DHCPv4 (udhcpc) client')"
     echo "$HDR (this will initiate a DHCPv4 Discover process, and should not interrupt your connection...)"
     killall -s SIGUSR2 udhcpc   # Force DHCPv4 RELEASE before restarting udhcpc because Unifi doesn't set the -R option
