@@ -35,10 +35,7 @@ errExit() {
 refresh_dhcp_clients() {
     ps -o cmd= -C odhcp6c >/dev/null
     if [[ $? -eq 0 ]]; then
-        echo "$HDR $(colorGreen 'Restarting DHCPv4 (udhcpc) and DHCPv6 (odhcp6c) clients') to take updates into account"
-        echo "$HDR (this will initiate a DHCP Discover process, and should not interrupt your connection...)"
-        killall udhcpc odhcp6c
-        echo "$HDR You can now check dhcp client logs with : grep -e dhcpc -e odhcp6c -e dhcpv6-mod /var/log/daemon.log"
+        ./restart-dhcp-clients.sh
     else
         echo "$HDR $(colorYellow 'NOTE:') odhcp6c process was not started, you will need to activate DHCPv6 in Unifi UI WAN settings"
         echo "$HDR (set 'IPv6 Connection' to 'DHCPv6' and 'Prefix Delegation Size' to 56)"
