@@ -2,10 +2,10 @@
 ########################################################################
 #
 # INSTALL OR UPDATE DHCPV6-MOD (can be run at any time)
-# This script will replace Unifi's executable /usr/sbin/odhcp6c           
-# by /data/dhcpv6-mod/odhcp6c.sh (and save odhcp6c as odhcp6c-org before) 
+# This script will replace Unifi's executable /usr/sbin/odhcp6c
+# by /data/dhcpv6-mod/odhcp6c.sh (and save odhcp6c as odhcp6c-org before)
 # Then it will restart both udhcpc and odhcp6c (restart discover process)
-# without interrupting the WAN connection (if dhcpv6.conf is valid)               
+# without interrupting the WAN connection (if dhcpv6.conf is valid)
 # It will only do that if needed (i.e. odhcp6c outdated vs dhcp6c-mod)
 # So this script can be executed at any time, at initial install
 # as well as for any update (e.g. from dhcpv6-mod repo)
@@ -93,20 +93,9 @@ if [[ ! -f "${dhcpv6_conf}" ]]; then
     cp -p ${dhcpv6_default_conf} ${dhcpv6_conf}
 fi
 
-# Ensure our on_boot.d script is a symlink and is up to date
+# Our on_boot.d script is no longer useful, remove it if exists
 onboot_script="/data/on_boot.d/05-replace-odhcp6c.sh"
-if [[ -e ${onboot_script} ]]; then
-    real_install_script="/data/dhcpv6-mod/udm-boot/05-replace-odhcp6c.sh"
-    diff -q ${onboot_script} ${real_install_script}
-    if [[ $? -ne 0 ]]; then
-        if [[ -x "${real_install_script}" ]]; then
-            echo "$HDR ${onboot_script} needs to be updated"
-            ln -sf ${real_install_script} ${onboot_script}
-            [ $? -ne 0 ] && errExit "unable to create symlink ${onboot_script}"
-            echo "$HDR existing ${onboot_script} successfully updated"
-        fi
-    fi
-fi
+[[ -e ${onboot_script} ]] && rm -f ${onboot_script}
 
 ###########################################################
 # FILE & PROCESS AGE ANALYSIS TO SEE IF UPDATE IS NEEDED  #
@@ -117,23 +106,25 @@ sbin_file_age=$(get_elaps_of_file "${sbin_file}")       # cannot be ERROR, eithe
 mod_script_age=$(get_elaps_of_file "${mod_script}")     # cannot be ERROR, this is our repository
 dhcpv6_conf_age=$(get_elaps_of_file "${dhcpv6_conf}")   # cannot be ERROR, we just copied it if inex
 
-need_update=1    # assume update because it's easier to determine if update not needed...
+need_update=0    # assume update of binary not needed
+need_refresh=0   # assume refresh of dhcpc running process not needed
 
-if [[ "${process_age}" != "ERROR" ]]; then
-    if [[ ("$sbin_file_age" -le "$mod_script_age") && ("$process_age" -le "$mod_script_age") && ("$process_age" -le "$dhcpv6_conf_age") ]]; then
-        echo "$HDR running ${bin_name} is more recent than dhcpv6-mod script (and config)"
-        need_update=0
-    else
-        [[ "$sbin_file_age" > "$mod_script_age" ]] && \
-            echo "$HDR ${sbin_file} ($(prettyAge ${sbin_file_age})) is older than ${mod_script} ($(prettyAge ${mod_script_age}))"
-        [[ "$process_age" > "$mod_script_age" ]] && \
-            echo "$HDR ${bin_name} process ($(prettyAge ${process_age})) is older than ${mod_script} ($(prettyAge ${mod_script_age}))"
-        [[ "$process_age" > "$dhcpv6_conf_age" ]] && \
-            echo "$HDR ${bin_name} process ($(prettyAge ${process_age})) is older than dhcpv6.conf ($(prettyAge ${dhcpv6_conf_age}))"
-        echo "$HDR ==> we need to update ${bin_name} from dhcpv6-mod"
-    fi
-else
+if [[ "${process_age}" = "ERROR" ]]; then
     echo "$HDR No runnning ${bin_name} process found, need to install or update from dhcpv6-mod"
+    need_update=1
+fi
+if [[ $sbin_file_age -gt $mod_script_age ]]; then
+    echo "$HDR ${sbin_file} ($(prettyAge ${sbin_file_age})) is older than ${mod_script} ($(prettyAge ${mod_script_age}))"
+    need_update=1
+fi
+# note: if process_age=ERROR then it is always less than any number
+if [[ $process_age -gt $mod_script_age ]]; then
+    echo "$HDR ${bin_name} process ($(prettyAge ${process_age})) is older than ${mod_script} ($(prettyAge ${mod_script_age}))"
+    need_update=1
+fi
+if [[ $process_age -gt $dhcpv6_conf_age ]]; then
+    echo "$HDR ${bin_name} process ($(prettyAge ${process_age})) is older than dhcpv6.conf ($(prettyAge ${dhcpv6_conf_age}))"
+    need_refresh=1
 fi
 
 if [[ "$(file -b --mime-type ${sbin_file})" =~ "application/" ]]; then
@@ -146,23 +137,31 @@ fi
 if [[ $force_update -eq 1 ]]; then
     echo "$HDR $(colorYellow 'NOTE:') no need to update binary or config, but you used --force so we will to that anyway"
     need_update=1
+fi
+
+[[ $need_update -eq 1 ]] && need_refresh=1
+
+if [[ $need_refresh -eq 0 ]]; then
+    echo "$HDR $(colorGreen 'No need to update') binary or to refresh config, use --force if you really want to do it anyway"
+    exit 0
 elif [[ $need_update -eq 0 ]]; then
     diff -q ${sbin_file} ${mod_script}
     if [[ $? -ne 0 ]]; then
         echo "$HDR $(colorYellow 'WARNING:') ${sbin_file} is unexpectedly both newer AND different from ${mod_script}..."
         echo "$HDR...perhaps have you modified it : to overwrite with dhcpv6-mod version, use --force argument"
-    else
-        echo "$HDR $(colorGreen 'No need to update') binary or config, use --force if you really want to do it anyway"
+        exit 0
     fi
-    exit 0
 fi
+
 
 ###########################################################
 #                    UPDATE IS NEEDED                     #
 ###########################################################
 
-cp -p ${mod_script} ${sbin_file}
-[[ $? -ne 0 ]] && exit 1 || echo "$HDR "$(colorGreen "${sbin_file} replaced by ${mod_script}")
+if [[ $need_update -eq 1 ]]; then
+    cp -p ${mod_script} ${sbin_file}
+    [[ $? -ne 0 ]] && exit 1 || echo "$HDR "$(colorGreen "${sbin_file} replaced by ${mod_script}")
+fi
 
 refresh_dhcp_clients
 

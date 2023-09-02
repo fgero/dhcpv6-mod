@@ -1,8 +1,5 @@
 # dhcpv6-mod
 
-> **NEW**
-> If you're not using Orange France ISP, it's now possible to configure your own DHCPv6 options (see the [Initialize DHCPv6 config file](#configure_dhcpv6) section).
-
 This project enables Unifi UDM/UDR to provide required DHCP V6 client options to ISPs (like Orange France), including by extracting values from V4 DHCP client options you've already set in Unifi UI.
 
 This mod was developed because there's no way to configure DHCP v6 client options in the WAN section of Unifi's UI.
@@ -11,8 +8,7 @@ It should work on any UDM/UDMPro/UDR with at least UnifiOS 2.4.x (3.x is recomme
 
 For Orange France, or any other ISP that requires a non-zero CoS for DHCP requests, you need to be in **UnifiOS 3.1.12 at least** (because [DHCP v4 renew was not working](https://community.ui.com/questions/Automatic-renew-at-mid-life-of-WAN-DHCPv4-lease-does-not-work-no-CoS-set-in-unicast-renew-UDR-is-di/df07d8aa-54e4-4f8e-b171-01b876a19aec) before this release)
 
-> **Note**
-> I have definitely given up trying to automaticaly re-install the mod after UnifiOS firmware update boots : `udm-boot` package does not work (see [issue #1](https://github.com/fgero/dhcpv6-mod/issues/1)), you can `dpkg -r udm-boot`
+If you're not using Orange France ISP, it's now possible to configure your own DHCPv6 options (see the [Initialize DHCPv6 config file](#configure_dhcpv6) section).
 
 > **Warning**
 > After any non-documentation commit of this repository, or if you update your config file, or after a firmware update reboot, don't forget to run the `./install-dhcpv6-mod.sh` command again (see [Install or update dhcpv6-mod](#install_dhcpv6_mod)).
@@ -158,14 +154,15 @@ This command must be issued :
 - when you update your configuration file (`/data/local/etc/dhcpv6.conf`)
 - after a **firmware update reboot** (not a normal reboot, which does not uninstall dhcpv6-mod)
 
-> **Note** > `install-dhcpv6-mod` will initially create the `/data/local/etc/dhcpv6.conf` configuration file (ONLY if it doesn't already existe), using `dhcpv6-orange.conf` file content
+> **Note** `install-dhcpv6-mod` will initially create the `/data/local/etc/dhcpv6.conf` configuration file (ONLY if it doesn't already existe), using `dhcpv6-orange.conf` file content
 
 In fact, the `./install-dhcpv6-mod.sh` command can be run at any time : it will only update `/usr/sbin/odhcp6c` with a new version of `odhcp6c.sh` if one of the following is true :
 
 - file `/usr/sbin/odhcp6c` is older than `odhcp6c.sh`
-- process `odhcp6c` is older than `odhcp6c.sh` or `dhcpv6.conf`
+- process `odhcp6c` is older than `odhcp6c.sh`
 
-In addition, if one of the above conditions is true AND if a DHCPv6 client process was already running, then the script will finish by calling `./restart-dhcp-clients.sh`, which will restart both DHCP v4 and v6 clients (full DHCP discover sequence for both, without interrupting the WAN connection). In that case, it is advisable to [Check IPv6 lease and connectivity](#check_ipv6)
+In addition, if a DHCPv6 client process was already running, and if either one of the above conditions is true OR if config file is newer than the running process then the script will finish by calling `./restart-dhcp-clients.sh`.
+This other script, that can also be called manually, will restart both DHCP v4 and v6 clients (full DHCP discover sequence for both, without interrupting the WAN connection). In that case, it is advisable to check WAN access and in particular [Check IPv6 lease and connectivity](#check_ipv6)
 
 &nbsp;  
 &nbsp;
