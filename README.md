@@ -56,6 +56,9 @@ Then we will :
 <sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;
 
+> **NEW**
+> The `/usr/sbin/odhcp6c` provided by Unifi now supports the `-K` option to pass a CoS option for DHCP v6, as needed for Orange ISP. So, if you are in v3.2.9 or newer you do not need to perform this step anymore : Skip to next section (Download dhcpv6-mod).
+
 First (if not already done), install git and cmake on the UDM/UDR :
 
 ```bash
@@ -184,7 +187,7 @@ Now you need to set `IPv6 Connection` to `DHCPv6` (instead of Disabled) and `Pre
 ![IPv6 WAN settings](images/IPV6_WAN_settings.png#gh-dark-mode-only)
 ![IPv6 WAN settings](images/IPV6_WAN_settings_light.png#gh-light-mode-only)
 
-Then, the ubios-udapi-server process should fork, in addition to udhcpc (V4 client), a new process running our own odhcp6c with all the parameters passed, like so :
+Then, the ubios-udapi-server process should fork, in addition to udhcpc (V4 client), a new process running our own odhcp6c (or /usr/sbin/odhcp6c-org if -K supported) with all the parameters passed, like so :
 
 ```console
 # ps -ef | grep dhcp
