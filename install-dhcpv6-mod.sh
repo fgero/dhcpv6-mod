@@ -33,11 +33,11 @@ errExit() {
 ###########################################################
 
 refresh_dhcp_clients() {
-    ps -o cmd= -C odhcp6c >/dev/null
+    ps -o cmd= -C ${process_name} >/dev/null
     if [[ $? -eq 0 ]]; then
         ./restart-dhcp-clients.sh
     else
-        echo "$HDR $(colorYellow 'NOTE:') odhcp6c process was not started, you will need to activate DHCPv6 in Unifi UI WAN settings"
+        echo "$HDR $(colorYellow 'NOTE:') ${process_name} process was not started, you will need to activate DHCPv6 in Unifi UI WAN settings"
         echo "$HDR (set 'IPv6 Connection' to 'DHCPv6' and 'Prefix Delegation Size' to 56)"
     fi
 }
@@ -81,6 +81,9 @@ fi
 [[ "$1" = "--force" ]] && force_update=1 || force_update=0
 
 bin_name="odhcp6c"
+process_name=${bin_name}
+${process_name}-org -h 2>&1 | grep -q '\-K '
+[ $? -eq 0 ] && process_name=${process_name}-org
 
 sbin_file="/usr/sbin/${bin_name}"
 mod_script="/data/dhcpv6-mod/${bin_name}.sh"
@@ -117,7 +120,7 @@ onboot_script="/data/on_boot.d/05-replace-odhcp6c.sh"
 # FILE & PROCESS AGE ANALYSIS TO SEE IF UPDATE IS NEEDED  #
 ###########################################################
 
-process_age=$(get_elaps_of_process "${bin_name}")   # can be ERROR if not started (V6 inact or KO)
+process_age=$(get_elaps_of_process "${process_name}")   # can be ERROR if not started (V6 inact or KO)
 sbin_file_age=$(get_elaps_of_file "${sbin_file}")       # cannot be ERROR, either Unifi or ours
 mod_script_age=$(get_elaps_of_file "${mod_script}")     # cannot be ERROR, this is our repository
 dhcpv6_conf_age=$(get_elaps_of_file "${dhcpv6_conf}")   # cannot be ERROR, we just copied it if inex
@@ -126,7 +129,7 @@ need_update=0    # assume update of binary not needed
 need_refresh=0   # assume refresh of dhcpc running process not needed
 
 if [[ "${process_age}" = "ERROR" ]]; then
-    echo "$HDR No runnning ${bin_name} process found, need to install or update from dhcpv6-mod"
+    echo "$HDR No runnning ${process_name} process found, need to install or update from dhcpv6-mod"
     need_update=1
 fi
 if [[ $sbin_file_age -gt $mod_script_age ]]; then
@@ -135,11 +138,11 @@ if [[ $sbin_file_age -gt $mod_script_age ]]; then
 fi
 # note: if process_age=ERROR then it is always less than any number
 if [[ $process_age -gt $mod_script_age ]]; then
-    echo "$HDR ${bin_name} process ($(prettyAge ${process_age})) is older than ${mod_script} ($(prettyAge ${mod_script_age}))"
+    echo "$HDR ${process_name} process ($(prettyAge ${process_age})) is older than ${mod_script} ($(prettyAge ${mod_script_age}))"
     need_update=1
 fi
 if [[ $process_age -gt $dhcpv6_conf_age ]]; then
-    echo "$HDR ${bin_name} process ($(prettyAge ${process_age})) is older than dhcpv6.conf ($(prettyAge ${dhcpv6_conf_age}))"
+    echo "$HDR ${process_name} process ($(prettyAge ${process_age})) is older than dhcpv6.conf ($(prettyAge ${dhcpv6_conf_age}))"
     need_refresh=1
 fi
 

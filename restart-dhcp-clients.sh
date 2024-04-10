@@ -24,13 +24,19 @@ errExit() {
   exit 1
 }
 
-ps -o cmd= -C odhcp6c >/dev/null
+process_name="odhcp6c"
+ps -o cmd= -C ${process_name} >/dev/null
+if [[ $? -ne 0 ]]; then
+  ps -o cmd= -C ${process_name}-org >/dev/null
+  [[ $? -eq 0 ]] && process_name=${process_name}-org
+fi
+
 if [[ $? -eq 0 ]]; then         
     echo "$HDR $(colorGreen 'Restarting DHCPv4 (udhcpc) and DHCPv6 (odhcp6c) clients') to take updates into account"
     echo "$HDR (this will initiate a DHCP Discover process, and should not interrupt your connection...)"
     killall -s SIGUSR2 udhcpc   # Force DHCPv4 RELEASE before restarting udhcpc because Unifi doesn't set the -R option
     sleep 1                     #....and ISP wants a proper RELEASE of both v4 and v6 leases before re-discover etc..
-    killall udhcpc odhcp6c
+    killall udhcpc ${process_name}
     echo "$HDR You can now check dhcp client logs with :"
     echo "grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log"
 else
