@@ -70,6 +70,12 @@ prettyAge() {
 #                    INITIALIZATIONS                      #
 ###########################################################
 
+# We need the "file" package in this script
+if [[ ! $(which file) ]]; then 
+  echo "$HDR This script needs the 'file' package, trying to install it..."
+  apt install -y file || errExit "Unable to install the 'file' package (are you root?), aborting."
+fi
+
 # Force overwrite existing script in /usr/sbin/odhcp6c only if --force
 [[ "$1" = "--update" ]] && echo "$HDR $(colorYellow 'NOTE:') --update ignored, no longer useful"
 [[ "$1" = "--force" ]] && force_update=1 || force_update=0
@@ -82,7 +88,17 @@ mod_bin="/data/local/bin/${bin_name}"
 dhcpv6_conf="/data/local/etc/dhcpv6.conf"
 dhcpv6_default_conf="/data/dhcpv6-mod/dhcpv6-orange.conf"
 
-${mod_bin} -h 2>&1 | grep -q '\-K ' || errExit "${mod_bin} is NOT a valid modified ${bin_name} binary"
+# Let's test if we have either Unifi's odhcp6c supporting -K, or we have built another one supporting that
+${mod_bin} -h 2>&1 | grep -q '\-K '
+if [ $? -ne 0 ]; then # if no rebuilt odhcp6c bin found, or (should not happen) if it does not support -K
+  if [[ "$(file -b --mime-type ${sbin_file})" =~ "application/" ]]; then # if /usr/sbin/odhcp6c is Unifi's executable binary
+    ${sbin_file} -h 2>&1 | grep -q '\-K '
+    [ $? -ne 0 ] && errExit "Unifi's ${sbin_file} does not support -K option, you must build one from source in ${mod_bin}, see README.md"
+  else # /usr/sbin/odhcp6c is our shell script, just check that backuped Unifi (odhcp6c-org) exec is there and supports -K
+    ${sbin_file}-org -h 2>&1 | grep -q '\-K '
+    [ $? -ne 0 ] && errExit "Mod previously installed, but neither ${mod_bin} nor ${sbin_file}-org supports -K option, that is unexpected, please build one from source in ${mod_bin}, see README.md"
+  fi
+fi
 
 # Avoids wget fw-download.ubnt.com IPv6 endpoints unreachable
 grep -sq '^prefer-family' /root/.wgetrc || echo 'prefer-family = IPv4' >> /root/.wgetrc
