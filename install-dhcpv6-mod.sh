@@ -12,7 +12,9 @@
 #
 ########################################################################
 
-HDR="[dhcpv6-mod]"  # header set in all messages
+DHCP6C_PATH="/usr/sbin/odhcp6c"                # Unifi's binary path for DHCPv6 client
+
+DHCPV6_CONF="/data/local/etc/dhcpv6.conf"     # Config file for DHCPv6 client options
 
 ###########################################################
 #                    MESSAGE UTILITIES                    #
@@ -32,16 +34,6 @@ errExit() {
 #                        FUNCTIONS                        #
 ###########################################################
 
-refresh_dhcp_clients() {
-    ps -o cmd= -C ${process_name} >/dev/null
-    if [[ $? -eq 0 ]]; then
-        ./restart-dhcp-clients.sh
-    else
-        echo "$HDR $(colorYellow 'NOTE:') ${process_name} process was not started, you will need to activate DHCPv6 in Unifi UI WAN settings"
-        echo "$HDR (set 'IPv6 Connection' to 'DHCPv6' and 'Prefix Delegation Size' to 56)"
-    fi
-}
-
 get_elaps_of_process() {
     process_age=$(ps -o etimes= -C $1)
     [[ -z "${process_age}" ]] && process_age="ERROR"
@@ -60,9 +52,9 @@ get_elaps_of_file() {
 
 prettyAge() {
     echo $1 | awk '{ a=$1;
-    if (a>=86400) printf "%dd",int(a/86400); a=a%86400;
-    if (a>=3600) printf "%02dh",int(a/3600); a=a%3600;
-    if (a>=60) printf "%02dm",int(a/60); a=a%60; printf "%02ds",a
+        if (a>=86400) printf "%dd",int(a/86400); a=a%86400;
+        if (a>=3600) printf "%02dh",int(a/3600); a=a%3600;
+        if (a>=60) printf "%02dm",int(a/60); a=a%60; printf "%02ds",a
     }'
 }
 
@@ -70,118 +62,130 @@ prettyAge() {
 #                    INITIALIZATIONS                      #
 ###########################################################
 
-# We need the "file" package in this script
-if [[ ! $(which file) ]]; then 
-  echo "$HDR This script needs the 'file' package, trying to install it..."
-  apt install -y file || errExit "Unable to install the 'file' package (are you root?), aborting."
-fi
+SCRIPT_DIR=$(dirname "$0")
+HDR="[install-dhcpv6-mod]"  # header set in all messages
 
-# Force overwrite existing script in /usr/sbin/odhcp6c only if --force
-[[ "$1" = "--update" ]] && echo "$HDR $(colorYellow 'NOTE:') --update ignored, no longer useful"
+need_update=0    # assume update of binary not needed
+need_refresh=0   # assume refresh of dhcpc running process not needed
+force_update=0   # force overwrite of existing /usr/sbin/odhcp6c in any case
+
 [[ "$1" = "--force" ]] && force_update=1 || force_update=0
 
-bin_name="odhcp6c"
-process_name=${bin_name}
-${process_name}-org -h 2>&1 | grep -q '\-K '
-[ $? -eq 0 ] && process_name=${process_name}-org
+read OS_V OS_R OS_M <<<$(mca-cli-op info|grep ^Version:|awk '{print $2}'| awk -F. '{print $1,$2,$3}')
+[[ $OS_V -lt 3 || $OS_V -eq 3 && $OS_R -lt 2 || $OS_V -eq 3 && $OS_R -eq 2 && OS_M -lt 9 ]] && \
+    errExit "You need to be at least in Unifi OS 3.2.9 to install dhcpv6-mod, sorry."
 
-sbin_file="/usr/sbin/${bin_name}"
-mod_script="/data/dhcpv6-mod/${bin_name}.sh"
-mod_bin="/data/local/bin/${bin_name}"
-dhcpv6_conf="/data/local/etc/dhcpv6.conf"
-dhcpv6_default_conf="/data/dhcpv6-mod/dhcpv6-orange.conf"
-
-# Let's test if we have either Unifi's odhcp6c supporting -K, or we have built another one supporting that
-${mod_bin} -h 2>&1 | grep -q '\-K '
-if [ $? -ne 0 ]; then # if no rebuilt odhcp6c bin found, or (should not happen) if it does not support -K
-  if [[ "$(file -b --mime-type ${sbin_file})" =~ "application/" ]]; then # if /usr/sbin/odhcp6c is Unifi's executable binary
-    ${sbin_file} -h 2>&1 | grep -q '\-K '
-    [ $? -ne 0 ] && errExit "Unifi's ${sbin_file} does not support -K option, you must build one from source in ${mod_bin}, see README.md"
-  else # /usr/sbin/odhcp6c is our shell script, just check that backuped Unifi (odhcp6c-org) exec is there and supports -K
-    ${sbin_file}-org -h 2>&1 | grep -q '\-K '
-    [ $? -ne 0 ] && errExit "Mod previously installed, but neither ${mod_bin} nor ${sbin_file}-org supports -K option, that is unexpected, please build one from source in ${mod_bin}, see README.md"
-  fi
-fi
+bin_name=$(basename ${DHCP6C_PATH})
+mod_script="${SCRIPT_DIR}/${bin_name}.sh"
 
 # Avoids wget fw-download.ubnt.com IPv6 endpoints unreachable
 grep -sq '^prefer-family' /root/.wgetrc || echo 'prefer-family = IPv4' >> /root/.wgetrc
 
 # Creates default dhcpv6.conf if does not exist (default : Orange DHCP V6 conf)
-if [[ ! -f "${dhcpv6_conf}" ]]; then
-    mkdir -p /data/local/etc
-    cp -p ${dhcpv6_default_conf} ${dhcpv6_conf}
+if [[ ! -f "${DHCPV6_CONF}" ]]; then
+    mkdir -p $(dirname ${DHCPV6_CONF})
+    cp -p ${SCRIPT_DIR}/dhcpv6-orange.conf ${DHCPV6_CONF}
+    [[ $? -ne 0 ]] && errExit "Unable to copy default Orange conf to ${DHCPV6_CONF}" 
+    echo "$HDR copied dhcpv6-orange.conf default config to ${DHCPV6_CONF}"
 fi
 
-# Our on_boot.d script is no longer useful, remove it if exists
-onboot_script="/data/on_boot.d/05-replace-odhcp6c.sh"
-[[ -e ${onboot_script} ]] && rm -f ${onboot_script}
+if readelf -h ${DHCP6C_PATH} &>/dev/null; then # if odhcp6c is a binary exec, then it's a first install
 
-###########################################################
-# FILE & PROCESS AGE ANALYSIS TO SEE IF UPDATE IS NEEDED  #
-###########################################################
+    #################################################
+    #  FIRST INSTALL (OR AFTER AN UNIFI OS UPDATE)  #
+    #################################################
 
-process_age=$(get_elaps_of_process "${process_name}")   # can be ERROR if not started (V6 inact or KO)
-sbin_file_age=$(get_elaps_of_file "${sbin_file}")       # cannot be ERROR, either Unifi or ours
-mod_script_age=$(get_elaps_of_file "${mod_script}")     # cannot be ERROR, this is our repository
-dhcpv6_conf_age=$(get_elaps_of_file "${dhcpv6_conf}")   # cannot be ERROR, we just copied it if inex
-
-need_update=0    # assume update of binary not needed
-need_refresh=0   # assume refresh of dhcpc running process not needed
-
-if [[ "${process_age}" = "ERROR" ]]; then
-    echo "$HDR No runnning ${process_name} process found, need to install or update from dhcpv6-mod"
-    need_update=1
-fi
-if [[ $sbin_file_age -gt $mod_script_age ]]; then
-    echo "$HDR ${sbin_file} ($(prettyAge ${sbin_file_age})) is older than ${mod_script} ($(prettyAge ${mod_script_age}))"
-    need_update=1
-fi
-# note: if process_age=ERROR then it is always less than any number
-if [[ $process_age -gt $mod_script_age ]]; then
-    echo "$HDR ${process_name} process ($(prettyAge ${process_age})) is older than ${mod_script} ($(prettyAge ${mod_script_age}))"
-    need_update=1
-fi
-if [[ $process_age -gt $dhcpv6_conf_age ]]; then
-    echo "$HDR ${process_name} process ($(prettyAge ${process_age})) is older than dhcpv6.conf ($(prettyAge ${dhcpv6_conf_age}))"
-    need_refresh=1
-fi
-
-if [[ "$(file -b --mime-type ${sbin_file})" =~ "application/" ]]; then
-    echo "$HDR ${sbin_file} detected as an original Unifi executable, not our shell script"
-    mv ${sbin_file} ${sbin_file}-org
-    [[ $? -ne 0 ]] && exit 1 || echo "$HDR "$(colorGreen "${sbin_file} renamed ${sbin_file}-org")
-    need_update=1   # force even if was determined to be 0 before
-fi
-
-if [[ $force_update -eq 1 ]]; then
-    echo "$HDR $(colorYellow 'NOTE:') no need to update binary or config, but you used --force so we will to that anyway"
-    need_update=1
-fi
-
-[[ $need_update -eq 1 ]] && need_refresh=1
-
-if [[ $need_refresh -eq 0 ]]; then
-    echo "$HDR $(colorGreen 'No need to update') binary or to refresh config, use --force if you really want to do it anyway"
-    exit 0
-elif [[ $need_update -eq 0 ]]; then
-    diff -q ${sbin_file} ${mod_script}
-    if [[ $? -ne 0 ]]; then
-        echo "$HDR $(colorYellow 'WARNING:') ${sbin_file} is unexpectedly both newer AND different from ${mod_script}..."
-        echo "$HDR...perhaps have you modified it : to overwrite with dhcpv6-mod version, use --force argument"
-        exit 0
+    # If there's a WAN IPv6 PD active, perhaps we don't need dhcpv6-mod
+    v6_if_json=$(ubios-udapi-client GET -r /interfaces | jq -r '.[] | select(.ipv6.dhcp6PDStatus[0].network and .status.comment=="WAN")')
+    if [[ -n "$v6_if_json" ]]; then
+        v6_if=$(echo $v6_if_json | jq -r '.identification.id')
+        v6_pd=$(echo $v6_if_json | jq -r '.ipv6.dhcp6PDStatus[0].network')
+        if [[ "$v6_pd" =~ ^([0-9a-fA-F]{0,4}:){2,7}(/([0-9]{1,3}))$ ]]; then
+            echo "$HDR $(colorYellow 'WARNING:') found a WAN interface $(colorGreen $v6_if) having an active IPv6 prefix delegation $(colorGreen $v6_pd)"
+            echo "$HDR This could mean that your IPv6 WAN already works without dhcpv6-mod installed"
+            read -p "$HDR Do you really want to install dhcpv6-mod [y/N] : " confirm_anyway
+            case "$confirm_anyway" in
+                y|Y|yes|YES) echo "$HDR OK, installing dhcpv6-mod despite having already a IPv6 PD...";;
+                n|Y|no|NO|"") echo "$HDR Installation canceled, as requested"; exit 1;;
+                *) echo "$HDR invalid response, installation canceled"; exit 1;;
+            esac
+        fi
     fi
+
+    # Just to be sure, test if odhcp6c binary is OK before renaming it
+    ${DHCP6C_PATH} -h 2>&1 | grep -q '\-K ' 
+    [[ $? -ne 0 ]] && errExit "${DHCP6C_PATH} doesn't have the -K option, that is unexpected"
+    echo "$HDR ${DHCP6C_PATH} detected as an original Unifi executable, we can rename it"
+    # Rename odhcp6c as odhcp6c-org so that our script will take it's place (and call it)
+    mv ${DHCP6C_PATH} ${DHCP6C_PATH}-org
+    [[ $? -ne 0 ]] && errExit "Unable to rename ${DHCP6C_PATH} to ${DHCP6C_PATH}-org" 
+    echo "$HDR "$(colorGreen "${DHCP6C_PATH} renamed ${DHCP6C_PATH}-org")
+    need_update=1   # update = we will copy our script in place of the odhcp6c binary
+
+elif readelf -h ${DHCP6C_PATH}-org &>/dev/null; then  # Not a first install
+
+    ###################################################
+    # NOT A FIRST INSTALL : UPDATE/REFRESH NEEDED ?   #
+    ###################################################
+
+    # Just to be sure, test if odhcp6c original binary is OK before renaming it
+    ${DHCP6C_PATH}-org -h 2>&1 | grep -q '\-K ' 
+    [[ $? -ne 0 ]] && errExit "${DHCP6C_PATH}-org doesn't have the -K option, that is unexpected"
+    echo "$HDR ${DHCP6C_PATH}-org detected as an original Unifi executable, this is not a first install"
+
+    dhcpv6_process=${bin_name}-org
+    process_age=$(get_elaps_of_process "${dhcpv6_process}")   # can be ERROR if not started (V6 inact or KO)
+    sbin_file_age=$(get_elaps_of_file "${DHCP6C_PATH}")       # cannot be ERROR, either Unifi or ours
+    mod_script_age=$(get_elaps_of_file "${mod_script}")       # cannot be ERROR, this is our repository
+    dhcpv6_conf_age=$(get_elaps_of_file "${DHCPV6_CONF}")     # cannot be ERROR, we just copied it if inex
+
+    if [[ "${process_age}" == "ERROR" ]]; then
+        echo "$HDR No runnning ${dhcpv6_process} process found : we'll assume ${DHCP6C_PATH} needs an update"
+        need_update=1
+    elif [[ $process_age -gt $mod_script_age ]]; then
+        echo "$HDR ${dhcpv6_process} process ($(prettyAge ${process_age})) is older than ${mod_script} file ($(prettyAge ${mod_script_age}))"
+        need_update=1
+    elif [[ $process_age -gt $dhcpv6_conf_age ]]; then
+        echo "$HDR ${dhcpv6_process} process ($(prettyAge ${process_age})) is older than dhcpv6.conf file ($(prettyAge ${dhcpv6_conf_age}))"
+        need_refresh=1
+    fi
+
+    if [[ $sbin_file_age -gt $mod_script_age ]]; then
+        echo "$HDR ${DHCP6C_PATH} ($(prettyAge ${sbin_file_age})) is older than ${mod_script} ($(prettyAge ${mod_script_age}))"
+        need_update=1
+    fi
+
+    if [[ $force_update -eq 1 && $need_update -eq 0 ]]; then
+        echo "$HDR $(colorYellow 'NOTE:') no need to update binary or config, but you used --force so we will to that anyway"
+        need_update=1
+    fi
+
+else errExit "neither ${DHCP6C_PATH} nor ${DHCP6C_PATH}-org are executable binaries, this is NOT expected"
+
 fi
 
-
 ###########################################################
-#                    UPDATE IS NEEDED                     #
+#             UPDATE OR REFRESH IS NEEDED                 #
 ###########################################################
 
 if [[ $need_update -eq 1 ]]; then
-    cp -p ${mod_script} ${sbin_file}
-    [[ $? -ne 0 ]] && exit 1 || echo "$HDR "$(colorGreen "${sbin_file} replaced by ${mod_script}")
+    cp -p ${mod_script} ${DHCP6C_PATH}
+    [[ $? -ne 0 ]] && errExit "unable to copy ${mod_script} to ${DHCP6C_PATH}, install failed"
+    echo "$HDR "$(colorGreen "${DHCP6C_PATH} now replaced by ${mod_script}")
+elif [[ $need_refresh -eq 1 ]]; then    
+    diff -q ${DHCP6C_PATH} ${mod_script}
+    if [[ $? -ne 0 ]]; then
+        echo "$HDR $(colorYellow 'WARNING:') ${DHCP6C_PATH} is unexpectedly both newer AND different from ${mod_script}..."
+        echo "$HDR...perhaps did you update it : to overwrite with the dhcpv6-mod version, use --force argument"
+        exit 1
+    fi
+else
+    echo "$HDR $(colorGreen 'No need to update') binary or to refresh config, use --force if you really want to do it anyway"
+    exit 0
 fi
 
-refresh_dhcp_clients
+# Refresh (restart) dhcp clients (if any)
+
+${SCRIPT_DIR}/restart-dhcp-clients.sh
 
 exit 0

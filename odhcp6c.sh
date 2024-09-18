@@ -31,7 +31,6 @@ default_dhcpv6_request_options="17,23,24"           # Default requested options 
 default_odhcp6c_options="-a -f -R"      # Default basic odhcp6c cmd options   
 
 org_odhcp6c=/usr/sbin/odhcp6c-org       # We have renamed original to -org
-new_odhcp6c=/data/local/bin/odhcp6c     # Updated exec (replaces Unifi's old odhcp6c), will be "exec" at the end of this script
 
 
 ###########################################################
@@ -64,35 +63,31 @@ showPartOf() {   # show only some first and last chars of a string
 # Interface name provided by udapi-server as last arg, we will look for it in JSON config
 arg_iface="${@: -1}"
 
-if [[ "${arg_iface}" == "test" ]]; then   # if last arg is "test" don't do any harm (to test locally on any host)
+if [[ "$1" == "test" ]]; then   # if 1st arg is "test" don't do any harm, just simulate
     test_mode=1
-    echo "$HDR $(colorYellow 'NOTE: running in test mode')"    
+    [[ $# -ne 2 ]] && errExit "test mode has 2 arguments, e.g. $0 test eth4.832" 
+    arg_iface=$2
+    echo "$HDR $(colorYellow 'NOTE: running in test mode') using interface ${arg_iface}"    
     dhcp6_client=/bin/echo    # so that we don't really call odhcp6c 
     DHCPV6_CONF=${SCRIPT_DIR}/test-files/dhcpv6.conf      # test conf, if exists
     DEFAULT_DHCPV6_CONF=${SCRIPT_DIR}/dhcpv6-orange.conf  # otherwise will take Orange conf
     DHCP6C_SUPPORTED_OPTIONS=${SCRIPT_DIR}/supported-options.json
 else 
     test_mode=0
-    dhcp6_client=${new_odhcp6c}
-    ${org_odhcp6c} -h 2>&1 | grep -q '\-K '                   # Test if Unifi exec finally has the CoS (-K) option
-    if [ $? -eq 0 ]; then dhcp6_client=${org_odhcp6c}; fi     # If YES, then use Unifi exec instead of our new one
+    dhcp6_client=${org_odhcp6c}
 fi
 
 [[ ! -x "$dhcp6_client" ]] && errExit "could not find odhcp6c executable $dhcp6_client"
 echo "$HDR Selected DHCPv6 client executable (with support for CoS) : ${dhcp6_client}"
-if [[ $test_mode -eq 1 ]]; then config_file=test-files/interfaces.json
-else config_file=$(ps -o cmd= -C ubios-udapi-server | awk '{ for(i=2;i<NF;i++) if($i=="-c") a=$(i+1); print a; }')
-fi
-[[ ! -f "$config_file" ]] && errExit "could not retrieve or find ubios-udapi-server config file"
-echo "$HDR Found ubios-udapi-server JSON config in $config_file"
 
 
 ###########################################################
 #      FETCHING DHCP V4 OPTIONS FROM JSON STATE FILE      #
 ###########################################################
 
-interface_json=$(cat $config_file | jq -r '.interfaces[] | select(.identification.id=="'${arg_iface}'")')
-[[ -z "$interface_json" ]] && errExit "could not retrieve interface $arg_iface in JSON config"
+interface_json=$(ubios-udapi-client GET -r /interfaces | jq -r '.[] | select(.identification.id=="'${arg_iface}'")')
+[[ -z "$interface_json" ]] && errExit "could not retrieve interface $arg_iface using ubios-udapi-client GET"
+
 dhcpopt_json=$(echo $interface_json | jq -r '.ipv4.dhcpOptions')
 [[ "$dhcpopt_json" == "null" ]] && errExit "could not retrieve dhcpOptions of interface ${arg_iface}"
 
@@ -115,8 +110,9 @@ done
 
 # Fetch either MAC Adress Clone or DHCPv4 option 61, the latter takes precedence if both were entered
 macaddr=$(echo $interface_json | jq -r '.identification.macOverride' | tr 'abcdef' 'ABCDEF' | tr -d ':')
-echo "$HDR Fetched MAC Address Clone : length=${#macaddr}"
 [ -z "${optv4[61]}" ] && optv4[61]="${macaddr}" || macaddr="${optv4[61]}"    
+echo "$HDR Fetched MAC Address Clone (or option 61): length=${#macaddr}"
+[ "${#macaddr}" -ne 12 ] && echo "$HDR $(colorYellow "WARNING:") length of macaddress clone is not 12 digits"
 
 # Fetch IPv4 CoS, if set we will use it for -K <CoS>, can be overriden by dhcpv6_cos setting of dhcpv6.conf
 dhcpv4_cos=$(echo $interface_json | jq -r '.ipv4.cos')
@@ -139,10 +135,12 @@ if [ ! -f ${DHCPV6_CONF} ]; then
 else
     echo "$HDR Found dhcp6c options file ${DHCPV6_CONF}"
 fi
+
+trap ">&2 echo $HDR $(colorRed 'ERROR:') 'problem running dhcp6 config file '"${DHCPV6_CONF}"', probably a reference to a V4 option'" EXIT
 set -u
-. ${DHCPV6_CONF}
+. ${DHCPV6_CONF} || errExit "problem running dhcp6 config file ${DHCPV6_CONF}"
 set +u
-[[ $? -ne 0 ]] && errExit "problem running dhcp6 config file ${DHCPV6_CONF}"
+trap - EXIT
 
 
 ###########################################################

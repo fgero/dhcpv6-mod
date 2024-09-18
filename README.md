@@ -1,31 +1,44 @@
 # dhcpv6-mod
 
-This project enables Unifi UDM/UDR to provide required DHCP V6 client options to ISPs (like Orange France), including by extracting values from V4 DHCP client options you've already set in Unifi UI.
+<p align="left">
+  <em><b>dhcpv6-mod</b> enables Unifi Gateways (UDMs, UDR, UCGs) to provide DHCP V6 client options required by some ISPs (e.g. Orange France), in order to activate both IPv4 and IPv6 WAN access.</em>
+</p>
 
-This mod was developed because there's no way to configure DHCP v6 client options in the WAN section of Unifi's UI.
+---
 
-It should work on any UDM/UDMPro/UDR with at least UnifiOS 2.4.x (3.x is recommended as I can no longer test in 2.x).
+### ⚠️ **Attention**
 
-For Orange France, or any other ISP that requires a non-zero CoS for DHCP requests, you need to be in **UnifiOS 3.1.12 at least** (because [DHCP v4 renew was not working](https://community.ui.com/questions/Automatic-renew-at-mid-life-of-WAN-DHCPv4-lease-does-not-work-no-CoS-set-in-unicast-renew-UDR-is-di/df07d8aa-54e4-4f8e-b171-01b876a19aec) before this release)
+You need <u>**UnifiOS 3.2.9 at least**</u> to use dhcpv6-mod (4.x is recommended as I can no longer test in v3).
 
-If you're not using Orange France ISP, it's now possible to configure your own DHCPv6 options (see the [Initialize DHCPv6 config file](#configure_dhcpv6) section).
+---
+
+This mod generates DHCPv6 options by extracting values from the V4 DHCP client options you've already set in Unifi Network UI.
+
+This is needed because there's no way to configure required DHCP V6 client options in the WAN section, so they need to be generated otherwise.
+
+UnifiOS 3.2.9 (or newer) is required, as this version brings the `-K` (CoS) option of `odhcp6c`.
+Also, you need SSH access to your Unifi router root account.
+
+If you don't want dhcpv6-mod's default DHCPv6 options (Orange France specific), you can configure your own (see the [Initialize DHCPv6 config file](#configure_dhcpv6) section).
+
+&nbsp;
 
 > **Warning**
 > After any non-documentation commit of this repository, or if you update your config file, or after a firmware update reboot, don't forget to run the `./install-dhcpv6-mod.sh` command again (see [Install or update dhcpv6-mod](#install_dhcpv6_mod)).
+> &nbsp;
 
-&nbsp;  
+&nbsp;
 &nbsp;
 
 ## Table of Contents
 
 - [How does it work ?](#how_does_it_work)
-- [Build a odhcp6c supporting CoS](#build_odhcp6c)
 - [Download dhcpv6-mod files](#download_dhcpv6_mod)
 - [Initialize DHCPv6 config file](#configure_dhcpv6)
 - [Install (or update) dhcpv6-mod](#install_dhcpv6_mod)
 - [Activate DHCPv6 WAN client](#activate_dhcpv6)
 - [Check IPv6 lease and connectivity](#check_ipv6)
-- [Rollback (if needed)](#rollback)
+- [Uninstalling dhcpv6-mod](#rollback)
   &nbsp;  
   &nbsp;
 
@@ -36,59 +49,16 @@ If you're not using Orange France ISP, it's now possible to configure your own D
 <sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;
 
-As a prerequisite, you must have entered the needed DHCP V4 WAN options (for Orange : 60, 61, 77 and 90), using Unifi's GUI WAN1 settings, as they are needed to generate V6 options.
+As a <b>prerequisite</b>, you must have entered all the DHCP V4 WAN options required by your ISP, using Unifi's Network application GUI WAN1 settings, as they are needed to generate V6 options.
+This means that your IPv4-only WAN access must already work.
 
-Then we will :
+The installation of this mod will rename Unifi's `/usr/sbin/odhcp6c` as `/usr/sbin/odhcp6c-org`, and replace the former by our own shell script (`odhcp6c.sh` of this repo).
 
-- Build a more recent version of `odhcp6c` (from [openwrt repo](https://github.com/openwrt/odhcp6c)) that has the `-K` option in order to pass a CoS for DHCP requests
-- Replace Unifi's `/usr/sbin/odhcp6c` by our own shell script `odhcp6c.sh`, which will :
-  - fetch the DHCPv4 options values from `ubios-udapi-server` state file
-  - prepare the DHCPv6 options with required formats, customizable via a configuration file
-  - finally, `exec` the new `/data/local/bin/odhcp6c` (the one we just built), with all the adequate options
+The new `/usr/sbin/odhcp6c` will :
 
-&nbsp;  
-&nbsp;
-
-<a id="build_odhcp6c"></a>
-
-## On the UDM/UDR, build a version of odhcp6c supporting CoS
-
-<sup>[(Back to top)](#table-of-contents)</sup>
-&nbsp;
-
-> **NEW**
-> The `/usr/sbin/odhcp6c` provided by Unifi now supports the `-K` option to pass a CoS option for DHCP v6, as needed for Orange ISP. So, if you are in v3.2.9 or newer you do not need to perform this step anymore : Skip to next section (Download dhcpv6-mod).
-
-First (if not already done), install git and cmake on the UDM/UDR :
-
-```bash
-apt-get install -y git cmake file
-```
-
-Then, make a new odhcp6c executable locally (here in root's home directory), from the [openwrt repo](https://github.com/openwrt/odhcp6c), and deploy it in `/data/local/bin` :
-
-```bash
-cd
-git clone https://github.com/openwrt/odhcp6c.git
-cd odhcp6c
-cmake .
-make
-mkdir -p /data/local/bin
-cp -p odhcp6c /data/local/bin
-```
-
-Check that our new odhcp6c supports the CoS option (the line with '-K' should be displayed) :
-
-```console
-# /data/local/bin/odhcp6c -h 2>&1 | grep priority
-	-K <sk-prio>	Set packet kernel priority (0)
-```
-
-> [OPTIONAL] You can delete the source code (not needed for our purpose) :
->
-> ```bash
-> rm -rf /root/odhcp6c
-> ```
+- Fetch the active DHCPv4 options values from `ubios-udapi-server` state file
+- Prepare the DHCPv6 options with required formats, customizable via configuration file `/data/local/etc/dhcpv6.conf`
+- Finally, `exec` Unifi's original `odhcp6c-org` with all the DHCPv6 options we prepared
 
 &nbsp;  
 &nbsp;
@@ -131,7 +101,7 @@ If you are using Orange France ISP, then you may skip this section and move to t
 
 If you are NOT using Orange France ISP, the first time you install `dhcpv6-mod`, you must create and customize the `/data/local/etc/dhcpv6.conf` file yourself before moving to the next section (installation), which will not overwrite it.
 
-Please read the [CONFIGURE.md](CONFIGURE.md) documentation page, which describes how to create your own config file.
+Please read the [CONFIGURE.md](docs/CONFIGURE.md) documentation page, which describes how to create your own config file.
 
 &nbsp;  
 &nbsp;
@@ -150,22 +120,38 @@ cd /data/dhcpv6-mod
 ./install-dhcpv6-mod.sh
 ```
 
+<details close><summary><code>Expected output</code> (click to expand)</summary><br/>
+
+```console
+root@UCG-Max:/data/dhcpv6-mod# ./install-dhcpv6-mod.sh
+[install-dhcpv6-mod] copied dhcpv6-orange.conf default config to /data/local/etc/dhcpv6.conf
+[install-dhcpv6-mod] /usr/sbin/odhcp6c detected as an original Unifi executable, we can rename it
+[install-dhcpv6-mod] /usr/sbin/odhcp6c renamed /usr/sbin/odhcp6c-org
+[install-dhcpv6-mod] /usr/sbin/odhcp6c now replaced by ./odhcp6c.sh
+[restart-dhcp-clients] Restarting DHCPv4 (udhcpc) and DHCPv6 (odhcp6c) clients to take updates into account
+[restart-dhcp-clients] (this will initiate a DHCPv4+v6 Discover process, and should not interrupt your connection...)
+[restart-dhcp-clients] Restart done, you can now check dhcp client logs with :
+grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log
+```
+
+</details><br>
+
 This command must be issued :
 
 - when installing `dhcpv6-mod` for the first time, of course
-- when `dhcpv6-mod` repository gets an update commit (except if limited to documentation)
-- when you update your configuration file (`/data/local/etc/dhcpv6.conf`)
-- after a **firmware update reboot** (not a normal reboot, which does not uninstall dhcpv6-mod)
+- when `dhcpv6-mod` repository gets an update commit (except when the update is documentation-only)
+- when you update your own configuration file (`/data/local/etc/dhcpv6.conf`)
+- after a **firmware update reboot** (i.e. Unifi OS update)
 
-> **Note** `install-dhcpv6-mod` will initially create the `/data/local/etc/dhcpv6.conf` configuration file (ONLY if it doesn't already existe), using `dhcpv6-orange.conf` file content
+Conversely, running `install-dhcpv6-mod.sh` is NOT needed after a "normal" reboot, as dhcpv6-mod is not removed in that situation.
 
-In fact, the `./install-dhcpv6-mod.sh` command can be run at any time : it will only update `/usr/sbin/odhcp6c` with a new version of `odhcp6c.sh` if one of the following is true :
+> **Note** During the first installation, `install-dhcpv6-mod.sh` will create the `/data/local/etc/dhcpv6.conf` configuration file <u>ONLY</u> if it doesn't already exist, using this repo's `dhcpv6-orange.conf` file.
 
-- file `/usr/sbin/odhcp6c` is older than `odhcp6c.sh`
-- process `odhcp6c` is older than `odhcp6c.sh`
+In fact, the `./install-dhcpv6-mod.sh` command can be run at any time : it will only update `/usr/sbin/odhcp6c` with a new version of `odhcp6c.sh` if needed (`/usr/sbin/odhcp6c` older than `odhcp6c.sh`).
 
-In addition, if a DHCPv6 client process was already running, and if either one of the above conditions is true OR if config file is newer than the running process then the script will finish by calling `./restart-dhcp-clients.sh`.
-This other script, that can also be called manually, will restart both DHCP v4 and v6 clients (full DHCP discover sequence for both, without interrupting the WAN connection). In that case, it is advisable to check WAN access and in particular [Check IPv6 lease and connectivity](#check_ipv6)
+In addition, if `/usr/sbin/odhcp6c` has been updated OR if your config file is newer than the running `odhcp6c` process then the script will finish by calling `./restart-dhcp-clients.sh`.
+
+The `./restart-dhcp-clients.sh` script, that can also be called manually, will restart both DHCP v4 and v6 clients (full DHCP discover sequence for both, without interrupting the WAN connection). In that case, it is advisable to check WAN access and in particular [Check IPv6 lease and connectivity](#check_ipv6)
 
 &nbsp;  
 &nbsp;
@@ -177,22 +163,22 @@ This other script, that can also be called manually, will restart both DHCP v4 a
 <sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;
 
-In the UI, go to Network > Settings > Internet > Primary (WAN1)
+In the UI, go to Network > Settings > Internet > click on Primary (WAN1)
 
-For Orange, you must already have set VLAN ID (832 for Orange), DHCP client options (V4) 60/77/90, and DHCP CoS 6.
-For non-Orange ISP, you must have a working WAN IPV4 connection, with all required options set in the UI.
+For <b>Orange</b>, you must already have set VLAN ID (832), MAC Adress clone of your Livebox, DHCP client options (V4) 60/77/90, and DHCP CoS 6.<br>
+In any case, you must have a working WAN IPv4 connection, with all required options set in the UI.
 
-Now you need to set `IPv6 Connection` to `DHCPv6` (instead of Disabled) and `Prefix Delegation Size` to `56` (instead of 64), like so :
+Next, you need to set `IPv6 Connection` to `DHCPv6` (instead of Disabled) and `Prefix Delegation Size` to `56` (instead of 64), like so :
 
 ![IPv6 WAN settings](images/IPV6_WAN_settings.png#gh-dark-mode-only)
 ![IPv6 WAN settings](images/IPV6_WAN_settings_light.png#gh-light-mode-only)
 
-Then, the ubios-udapi-server process should fork, in addition to udhcpc (V4 client), a new process running our own odhcp6c (or /usr/sbin/odhcp6c-org if -K supported) with all the parameters passed, like so :
+Then, the `ubios-udapi-server` process should fork, in addition to `udhcpc` (V4 client), a new process running our own `odhcp6c` (which will exec `/usr/sbin/odhcp6c-org`), with all the V6 parameters passed, like so :
 
 ```console
 # ps -ef | grep dhcp
 root     2574251    4134  0 Jun18 ?        00:00:00 /usr/bin/busybox-legacy/udhcpc --foreground --interface eth4.832 --script /usr/share/ubios-udapi-server/ubios-udhcpc-script --decline-script /usr/share/ubios-udapi-server/ubios-udhcpc-decline-script -r <publicIPv4> -y 6 --vendorclass sagem -x 77:<userclass_hex> -x 90:<auth>
-root     2574252    4134  0 Jun18 ?        00:00:00 /data/local/bin/odhcp6c -a -f -K6 -R -r11,17,23,24 -V <pfx+vendorclass> -c <pfx+clientid> -u <userclass_string> -x 11:<auth> -v -s /usr/share/ubios-udapi-server/ubios-odhcp6c-script -D -P 56 eth4.832
+root     2574252    4134  0 Jun18 ?        00:00:00 /usr/sbin/odhcp6c-org -a -f -K6 -R -r11,17,23,24 -V <pfx+vendorclass> -c <pfx+clientid> -u <userclass_string> -x 11:<auth> -v -s /usr/share/ubios-udapi-server/ubios-odhcp6c-script -D -P 56 eth4.832
 ```
 
 &nbsp;  
@@ -218,7 +204,7 @@ grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log
 2023-07-17T15:45:26+02:00 UDR odhcp6c[2540864]: Send RELEASE message (elapsed 0ms, rc 0)
 2023-07-17T15:45:26+02:00 UDR ubios-udapi-server[2540863]: udhcpc: received SIGTERM
 2023-07-17T15:45:26+02:00 UDR ubios-udapi-server[3018621]: udhcpc: started, v1.34.1
-2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Selected DHCPv6 client executable (with support for CoS) : /data/local/bin/odhcp6c
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Selected DHCPv6 client executable (with support for CoS) : /usr/sbin/odhcp6c-org
 2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Found ubios-udapi-server JSON config in /data/udapi-config/ubios-udapi-server/ubios-udapi-server.state
 2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Fetched DHCPv4 option 60 : length=5 value=s...m
 2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Fetched DHCPv4 option 77 : length=43 value=FSVDS...ebox3
@@ -236,7 +222,7 @@ grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log
 2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Generated DHCPv6 option 15 : length=43 value=FSVDS...ebox3 (userclass, -u )
 2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Generated DHCPv6 option 16 : length=22 value=00000...7656D (vendorclass, -V )
 2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Successfully generated 4 DHCPv6 options using /data/local/etc/dhcpv6.conf
-2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Launching exec /data/local/bin/odhcp6c -a -f -R -r17,23,24 -K6 -c 0003...xxxx -x 11:00000...xxxxx -u FSVDS...ebox3 -V 00000...7656D  -v -s /usr/share/ubios-udapi-server/ubios-odhcp6c-script -D -P 56 eth4.832
+2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018622]: [dhcpv6-mod] Launching exec /usr/sbin/odhcp6c-org -a -f -R -r17,23,24 -K6 -c 0003...xxxx -x 11:00000...xxxxx -u FSVDS...ebox3 -V 00000...7656D  -v -s /usr/share/ubios-udapi-server/ubios-odhcp6c-script -D -P 56 eth4.832
 2023-07-17T15:45:27+02:00 UDR odhcp6c[3018622]: (re)starting transaction on eth4.832
 2023-07-17T15:45:27+02:00 UDR ubios-udapi-server[3018621]: udhcpc: lease of 90.xx.xx.xxx obtained from 80.xx.xxx.x, lease time 604800
 2023-07-17T15:45:28+02:00 UDR odhcp6c[3018622]: Starting SOLICIT transaction (timeout 4294967295s, max rc 0)
@@ -318,10 +304,12 @@ In the previous section, you already have set `IPv6 Interface Type` to `Prefix D
 
 Next, you can _optionnaly_ check `Router Advertisment (RA)` (so enable RA) for some Network(s) when you want devices to dynamically get IPv6 addresses.
 
-> **Note** This can lead to issues in some use cases, depending on your LAN and WLAN devices configurations...you'll have to carefully test everything
+> **Note** This can lead to issues in some use cases, depending on your LAN and WLAN devices configurations...you'll have to carefully test everything.
 
-![IPv6 LAN settings](images/IPV6_LAN_settings.png#gh-dark-mode-only)
-![IPv6 LAN settings](images/IPV6_LAN_settings_light.png#gh-light-mode-only)
+Go to Network > Settings > Networks > Choose one > click "IPv6" switch, then :
+
+![IPv6 LAN settings](images/IPV6_LAN_settings.jpg#gh-dark-mode-only)
+![IPv6 LAN settings](images/IPV6_LAN_settings_light.jpg#gh-light-mode-only)
 
 &nbsp;  
 &nbsp;
@@ -352,10 +340,22 @@ grep -sq '^prefer-family' /root/.wgetrc || echo 'prefer-family = IPv4' >> /root/
 
 <a id="rollback"></a>
 
-## Rollback (if needed)
+## Uninstalling dhcpv6-mod
 
 <sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;
+
+#### How to uninstall dhcpv6-mod
+
+You just have to restore Unifi /usr/sbin/odhcp6c original binary, like so :
+
+`mv /usr/sbin/odhcp6c-org /usr/sbin/odhcp6c`
+
+and then restart the clients :
+
+`./restart-dhcp-clients.sh`
+
+#### How to disable IPv6
 
 In the UI, go to Network > Settings > Internet > Primary (WAN1), and set "IPv6 Connection" to "Disabled" (instead of DHCPv6).
 
