@@ -31,6 +31,8 @@ errExit() {
 
 HDR="[restart-dhcp-clients]"  # header set in all messages
 
+[[ "$1" == "-f" ]] && opt_follow=1 || opt_follow=0
+
 if ps -o cmd= -C ${DHCP6C_BIN} &>/dev/null; then
     dhcpv6_process=${DHCP6C_BIN}
 elif ps -o cmd= -C ${DHCP6C_BIN}-org &>/dev/null; then
@@ -40,7 +42,7 @@ else
     dhcpv6_process=""
 fi
 
-if [[ -n "${dhcpv6_process}" ]]; then         
+if [[ -n "${dhcpv6_process}" ]]; then
     echo "$HDR $(colorGreen 'Restarting DHCPv4 (udhcpc) and DHCPv6 (odhcp6c) clients') to take updates into account"
     echo "$HDR (this will initiate a DHCPv4+v6 Discover process, and should not interrupt your connection...)"
 else
@@ -52,7 +54,11 @@ killall -s SIGUSR2 ${DHCP4C_BIN}   # Force DHCPv4 RELEASE before restarting udhc
 sleep 1                            #....and ISP wants a proper RELEASE of both v4 and v6 leases before re-discover etc..
 killall ${DHCP4C_BIN} ${dhcpv6_process}
 
-echo "$HDR Restart done, you can now check dhcp client logs with :"
-echo "grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log"
+if [[ $opt_follow -eq 1 ]]; then
+    tail -f /var/log/daemon.log | grep -E 'dhcpc|odhcp6c|dhcpv6-mod'
+else
+  echo "$HDR Restart done, you can now check dhcp client logs with :"
+  echo "grep -E 'dhcpc|odhcp6c|dhcpv6-mod' /var/log/daemon.log"
+fi
 
 exit 0

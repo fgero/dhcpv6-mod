@@ -86,23 +86,23 @@ Special case : DHCPv4 option 61 (client-id) is available as both `${optv4[61]}` 
 
 By default, dhcpv6-mod will copy the DHCPv4 CoS set in the UI to the DHCPv6 CoS option (-K) of odhcp6c, so you don't need to specify it.
 
-> So, even if a `dhcpv6_cos=n` option is available, DO NOT USE IT unless you know what you do, as it will probably break the DHCP lease (and your WAN connection). The reason : in almost 100% of situations (including Orange) the default behaviour is the correct one (DHCPv6 CoS copied from DHCPv4 CoS)
+> So, even if a `dhcpv6_cos=n` option is available, DO NOT USE IT unless you know what you do, as it will probably break the DHCP lease (and your WAN connection). The reason : in almost 100% of situations (including Orange) the default behaviour is the correct one (DHCPv6 CoS must be the same as DHCPv4 CoS)
 
-Option 6 (ORO, Option Requested options) to request from the DHCPv6 server can be overriden, default is "17,23,24" :
+DHCPv6 request option 6 (ORO, Option Requested options) can be overriden like so :
 
 ```bash
 dhcpv6_request_options=17,23,24    # default, works for Orange, don't use that setting if you don't need to
 ```
 
-This is : Vendor specific infos (17) + DNS servers (23) + Domain search list (24)
+Default value (above) : Vendor specific infos (17) + DNS servers (23) + Domain search list (24) are requested from the server
 
-The other options sent to odhcp6c command line are, by default, "-a -f -R". If you want to change that for your ISP :
+The other options sent to Unifi's `odhcp6c` command line can be changed like so :
 
 ```bash
 odhcp6c_options="-a -f -R"         # default, works for Orange, don't use that setting if you don't need to
 ```
 
-This is : deactivate support for reconfigure opcode (-a), deactivate sending hostname (-f), deactivate requesting option not specified in -r (which are specified with dhcpv6_request_options).
+Default value (above) : `-a` = deactivate support for reconfigure opcode, `-f` = deactivate sending hostname, `-R` = deactivate requesting option not specified in -r (those are specified with dhcpv6_request_options).
 
 &nbsp;
 
@@ -174,7 +174,7 @@ You can test what odhcp6c-mod would do with your configuration file (or the defa
 
 You need to be in SSH on the router.
 
-For that you can create a `test-files` subdirectory in `/data/dhcpv6-mod` clone dir (note: test-files/ will be "gitignored") :
+For that you can optionally create a `test-files` subdirectory in `/data/dhcpv6-mod` clone dir (note: test-files/ will be "gitignored") :
 
 ```bash
 cd /data/dhcpv6-mod    # or to any clone directory
@@ -182,9 +182,9 @@ mkdir test-files
 cp -p dhcpv6-orange.conf test-files/dhcpv6.conf
 ```
 
-If you don't create `test-files` then your current config file, or the defaultone, will be used.
+If you don't create `test-files/` then your current config file, or the default one, will be used.
 
-Then, you can test how odhcp6c.sh would fetch your interface details and generate DHCP v6 options using your dhcpv6.conf :
+Then, you can test how `odhcp6c.sh` would fetch your interface details and generate DHCP v6 options using your dhcpv6.conf :
 
 ```bash
 ./odhcp6c.sh test ethx.832
@@ -192,7 +192,7 @@ Then, you can test how odhcp6c.sh would fetch your interface details and generat
 
 (please replace ethx.832 with your interface and vlanid)
 
-This will not change anything but generate a useful log like this one (the values are not mine, they come from test-files/interface.json) :
+This will not do anything other than generating a useful log like this one (the values are not mine, they come from test-files/interface.json) :
 
 ```console
 [dhcpv6-mod] NOTE: running in test mode using interface eth4.832

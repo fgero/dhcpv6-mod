@@ -150,37 +150,35 @@ trap - EXIT
 # Supported DHCPv6 options of odhcp6c
 supported_options_json=$(cat $DHCP6C_SUPPORTED_OPTIONS | jq -r '.supportedOptions[]')
 
-# Initialize odhcp6c_opts with minimum options for odhcp6c cmd
-if [[ -z "${odhcp6c_options}" ]]; then
+# Initialize odhcp6c_options with minimum options for odhcp6c cmd
+if [[ -z "${odhcp6c_options+x}" ]]; then
     odhcp6c_options="${default_odhcp6c_options}"  # see at the top of this script for the default
 else
     echo "$HDR" $(colorYellow "NOTE:") "odhcp6c_options default overriden to ${odhcp6c_options}"
 fi
-odhcp6c_opts="${default_odhcp6c_options}"
 
-# -r argument : requested opts from DHCP server, comma-separated
-if [[ -z "${dhcpv6_request_options}" ]]; then
+# -r argument : requested options from DHCP server, comma-separated
+if [[ -z "${dhcpv6_request_options+x}" ]]; then
     dhcpv6_request_options="${default_dhcpv6_request_options}"  # see at the top of this script for the default
 else
     echo "$HDR" $(colorYellow "NOTE:") "dhcpv6_request_options default overriden to ${dhcpv6_request_options}"
 fi
-odhcp6c_opts="${odhcp6c_opts} -r${dhcpv6_request_options}"
+[[ -n "${dhcpv6_request_options}" ]] && odhcp6c_options="${odhcp6c_options} -r${dhcpv6_request_options}"
 
 # Set DHCPv6 CoS, to same as DHCPv4 CoS except if user specified a different value dhcpv6_cos (should not happen...)
-if [[ ! -z "${dhcpv6_cos}" ]]; then
+if [[ -z "${dhcpv6_cos+x}" ]]; then
+    dhcpv6_cos=${dhcpv4_cos}
+    echo "$HDR Generated DHCPv6 CoS of ${dhcpv6_cos} (default is to set to the same value as DHCPv4 CoS)"
+else
     if [[ "${dhcpv6_cos}" == "${dhcpv4_cos}" ]]; then
         echo "$HDR" $(colorYellow "NOTE:") "dhcpv6_cos=${dhcpv6_cos} setting is useless, as DHCPv4 CoS ${dhcpv4_cos} is copied by default, consider removing the setting"
     else
         echo "$HDR" $(colorYellow "WARNING: dhcpv6_cos=${dhcpv6_cos} setting is not the same as DHCPv4 CoS ${dhcpv4_cos}, please check !")
-        echo "$HDR Nevertheless, DHCPv6 CoS ${dhcpv6_cos} will be applied, but this can lead to WAN DHCP not working at all"
     fi
-else
-    dhcpv6_cos=${dhcpv4_cos}
-    echo "$HDR Generated DHCPv6 CoS of ${dhcpv6_cos} (default is to set to the same value as DHCPv4 CoS)"
 fi
-odhcp6c_opts="${odhcp6c_opts} -K${dhcpv6_cos}"
+[[ -n "${dhcpv6_cos}" ]] && odhcp6c_options="${odhcp6c_options} -K${dhcpv6_cos}"
 
-odhcp6c_opts_abbrev="${odhcp6c_opts}"
+odhcp6c_options_abbrev="${odhcp6c_options}"
 
 # Iterate over V6 options set in DHCPV6_CONF to construct odhcp6c arguments
 for n in ${!optv6[@]}; do
@@ -199,8 +197,8 @@ for n in ${!optv6[@]}; do
         val2=$(echo -n "$val" | xxd -p -u -c9999)     # string to hexdump : e.g. Live to 4C697665
     fi
     echo "$HDR Generated DHCPv6 option $n : length=${#val2} value="$(showPartOf "${val2}")" (${alias}, ${odhcp6cOption})"
-    odhcp6c_opts="${odhcp6c_opts} ${odhcp6cOption}${val2}"
-    odhcp6c_opts_abbrev="${odhcp6c_opts_abbrev} ${odhcp6cOption}$(showPartOf "${val2}")" 
+    odhcp6c_options="${odhcp6c_options} ${odhcp6cOption}${val2}"
+    odhcp6c_options_abbrev="${odhcp6c_options_abbrev} ${odhcp6cOption}$(showPartOf "${val2}")" 
 done
 
 echo "$HDR Successfully generated ${#optv6[@]} DHCPv6 options using ${DHCPV6_CONF}"
@@ -217,7 +215,7 @@ if [[ $test_mode -eq 1 ]]; then printf "$HDR %s : " "$(colorGreen 'odhcp6c optio
 else
     echo "$HDR Sleeping 5 seconds before launching ${dhcp6_client}, to let udhcpc send its discover..."
     sleep 5
-    echo "$HDR" $(colorGreen "Launching exec") "${dhcp6_client} ${odhcp6c_opts_abbrev} ${arg_without_e}"
+    echo "$HDR" $(colorGreen "Launching exec") "${dhcp6_client} ${odhcp6c_options_abbrev} ${arg_without_e}"
 fi
 
-exec ${dhcp6_client} ${odhcp6c_opts} ${arg_without_e}
+exec ${dhcp6_client} ${odhcp6c_options} ${arg_without_e}

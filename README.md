@@ -56,7 +56,7 @@ The installation of this mod will rename Unifi's `/usr/sbin/odhcp6c` as `/usr/sb
 
 The new `/usr/sbin/odhcp6c` will :
 
-- Fetch the active DHCPv4 options values from `ubios-udapi-server` state file
+- Fetch the active DHCPv4 options values using the `ubios-udapi-client` API
 - Prepare the DHCPv6 options with required formats, customizable via configuration file `/data/local/etc/dhcpv6.conf`
 - Finally, `exec` Unifi's original `odhcp6c-org` with all the DHCPv6 options we prepared
 
@@ -152,6 +152,8 @@ In fact, the `./install-dhcpv6-mod.sh` command can be run at any time : it will 
 In addition, if `/usr/sbin/odhcp6c` has been updated OR if your config file is newer than the running `odhcp6c` process then the script will finish by calling `./restart-dhcp-clients.sh`.
 
 The `./restart-dhcp-clients.sh` script, that can also be called manually, will restart both DHCP v4 and v6 clients (full DHCP discover sequence for both, without interrupting the WAN connection). In that case, it is advisable to check WAN access and in particular [Check IPv6 lease and connectivity](#check_ipv6)
+
+NOTE: if you add `-f` (follow) to `install-dhcpv6-mod.sh` or `restart-dhcp-clients.sh` commands, a `tail -f /var/log/daemon.log | grep -E 'dhcpc|odhcp6c|dhcpv6-mod'` will automatically be executed at the end of the script, you'll need a Control-C to stop it.
 
 &nbsp;  
 &nbsp;

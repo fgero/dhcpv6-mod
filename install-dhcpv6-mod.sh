@@ -69,7 +69,11 @@ need_update=0    # assume update of binary not needed
 need_refresh=0   # assume refresh of dhcpc running process not needed
 force_update=0   # force overwrite of existing /usr/sbin/odhcp6c in any case
 
-[[ "$1" = "--force" ]] && force_update=1 || force_update=0
+force_update=0
+if [[ "$1" = "--force" ]]; then
+  force_update=1; shift
+fi
+[[ "$1" == "-f" ]] && opt_follow=" -f" || opt_follow=""
 
 read OS_V OS_R OS_M <<<$(mca-cli-op info|grep ^Version:|awk '{print $2}'| awk -F. '{print $1,$2,$3}')
 [[ $OS_V -lt 3 || $OS_V -eq 3 && $OS_R -lt 2 || $OS_V -eq 3 && $OS_R -eq 2 && OS_M -lt 9 ]] && \
@@ -85,7 +89,7 @@ grep -sq '^prefer-family' /root/.wgetrc || echo 'prefer-family = IPv4' >> /root/
 if [[ ! -f "${DHCPV6_CONF}" ]]; then
     mkdir -p $(dirname ${DHCPV6_CONF})
     cp -p ${SCRIPT_DIR}/dhcpv6-orange.conf ${DHCPV6_CONF}
-    [[ $? -ne 0 ]] && errExit "Unable to copy default Orange conf to ${DHCPV6_CONF}" 
+    [[ $? -ne 0 ]] && errExit "Unable to copy default Orange conf to ${DHCPV6_CONF}"
     echo "$HDR copied dhcpv6-orange.conf default config to ${DHCPV6_CONF}"
 fi
 
@@ -113,12 +117,16 @@ if readelf -h ${DHCP6C_PATH} &>/dev/null; then # if odhcp6c is a binary exec, th
     fi
 
     # Just to be sure, test if odhcp6c binary is OK before renaming it
-    ${DHCP6C_PATH} -h 2>&1 | grep -q '\-K ' 
+    ${DHCP6C_PATH} -h 2>&1 | grep -q '\-K '
     [[ $? -ne 0 ]] && errExit "${DHCP6C_PATH} doesn't have the -K option, that is unexpected"
-    echo "$HDR ${DHCP6C_PATH} detected as an original Unifi executable, we can rename it"
+    echo "$HDR ${DHCP6C_PATH} detected as an original Unifi executable"
+
+    # If odhcp6c-org backup already exists, we can't overwite it
+    [[ -f ${DHCP6C_PATH}-org ]] && errExit "${DHCP6C_PATH}-org already exists, that is unexpected"
+
     # Rename odhcp6c as odhcp6c-org so that our script will take it's place (and call it)
     mv ${DHCP6C_PATH} ${DHCP6C_PATH}-org
-    [[ $? -ne 0 ]] && errExit "Unable to rename ${DHCP6C_PATH} to ${DHCP6C_PATH}-org" 
+    [[ $? -ne 0 ]] && errExit "Unable to rename ${DHCP6C_PATH} to ${DHCP6C_PATH}-org"
     echo "$HDR "$(colorGreen "${DHCP6C_PATH} renamed ${DHCP6C_PATH}-org")
     need_update=1   # update = we will copy our script in place of the odhcp6c binary
 
@@ -129,7 +137,7 @@ elif readelf -h ${DHCP6C_PATH}-org &>/dev/null; then  # Not a first install
     ###################################################
 
     # Just to be sure, test if odhcp6c original binary is OK before renaming it
-    ${DHCP6C_PATH}-org -h 2>&1 | grep -q '\-K ' 
+    ${DHCP6C_PATH}-org -h 2>&1 | grep -q '\-K '
     [[ $? -ne 0 ]] && errExit "${DHCP6C_PATH}-org doesn't have the -K option, that is unexpected"
     echo "$HDR ${DHCP6C_PATH}-org detected as an original Unifi executable, this is not a first install"
 
@@ -172,7 +180,7 @@ if [[ $need_update -eq 1 ]]; then
     cp -p ${mod_script} ${DHCP6C_PATH}
     [[ $? -ne 0 ]] && errExit "unable to copy ${mod_script} to ${DHCP6C_PATH}, install failed"
     echo "$HDR "$(colorGreen "${DHCP6C_PATH} now replaced by ${mod_script}")
-elif [[ $need_refresh -eq 1 ]]; then    
+elif [[ $need_refresh -eq 1 ]]; then
     diff -q ${DHCP6C_PATH} ${mod_script}
     if [[ $? -ne 0 ]]; then
         echo "$HDR $(colorYellow 'WARNING:') ${DHCP6C_PATH} is unexpectedly both newer AND different from ${mod_script}..."
@@ -186,6 +194,6 @@ fi
 
 # Refresh (restart) dhcp clients (if any)
 
-${SCRIPT_DIR}/restart-dhcp-clients.sh
+${SCRIPT_DIR}/restart-dhcp-clients.sh $opt_follow
 
 exit 0
