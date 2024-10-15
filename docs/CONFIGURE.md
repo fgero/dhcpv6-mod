@@ -50,7 +50,9 @@ All DHCP V4 options that are available (from the current state) are stored in th
 
 So, for example, use `${dhcpv4[16]}` to fetch the value you set for DHCPv4 option 16 in the UI (please always use the brackets syntax...).
 
-In order to generate DHCPv6 options, you must set the `dhcpv6[<opt#>]` environment variable (also a bash array). Example with like-for-like copy of 2 options from V4 to V6 :
+In order to generate DHCPv6 options, you must set the `dhcpv6[<opt#>]` environment variable (also a bash array).
+
+Example with like-for-like copy of 2 options from V4 to V6 :
 
 ```bash
 optv6[15]=${optv4[77]}                    # userclass
@@ -59,15 +61,15 @@ optv6[11]=${optv4[90]}                    # authentication
 
 (of course you could add harcoded hex strings prefixes and/or suffixes...)
 
-NOTE : The value of `${dhcpv4[<opt#>]}` can be a little bit different from what you entered in the UI, more precisely :
+The value retrieved by `${dhcpv4[<opt#>]}` can be a little bit different from what you entered in Unifi Network UI, more precisely :
 
-- if you entered a hexstring like `01:02:ab:CD` in the UI, then the value in `optv4[]` will be `0102ABCD` (semicolons dropped and uppercase hex letters)
+- if you entered a hexstring like `01:02:ab:CD` in the UI, then the value in `optv4[]` will be `0102ABCD` (semicolons dropped, and hex letters to uppercase)
 - if you entered a hexstring like `0102abCD`, then the value will be `0102ABCD` (uppercase hex letters)
-- otherwise the value will be the same as what you entered in the UI, for example "StringNotHexadecimal", or "0102ABCD" are copied as-is into `optv4[]`
+- non-hexadecimal strings will be untouched, for example "StringNotHexadecimal", or "0102ABCD" are copied as-is into `optv4[]`
 
-This manipulation is needed because odhcp6c wants hexadecimal strings without ':' and with uppercase hex letters.
+This manipulation is needed because `odhcp6c` wants hexadecimal strings without ':' and with uppercase hex letters only.
 
-> **Warning** : if you use `${optv4[n]}` with a option number 'n' that is NOT in the current state (i.e. not entered in Unifi's UI WAN DHCP v4 settings), then the script will immediately **FAIL**. That's intentional, there is no reason why you would need a non-existent DHCPv4 option to generate a DHCPv6 option.
+> **Warning** : if you use `${optv4[n]}` with a V4 option number 'n' that is NOT set (i.e. not entered in Unifi's UI WAN DHCP v4 settings), then the script will immediately **FAIL**. That's intentional, there is no reason why you would need a non-existent DHCPv4 option to generate a DHCPv6 option.
 
 &nbsp;
 
@@ -78,15 +80,15 @@ This manipulation is needed because odhcp6c wants hexadecimal strings without ':
 <sup>[(Back to top)](#table-of-contents)</sup>
 &nbsp;
 
-If needed, a `dhcpv4_hex[<opt#>]` array is available with the hexstring equivalent of a character string DHCPv4 option value (e.g. if dhcpv4[60]=sagem then dhcpv4_hex[60]=736167656D). This can be useful if the DHCP V6 option must be in hex (like DHCPv6 option 16, which is usually generated from DHCPv4 60 string value).
+If needed, an additional array `dhcpv4_hex[<opt#>]` is provided, with the hexstring equivalent of a character string `dhcpv4[<opt#>]` value (e.g. if dhcpv4[60]=sagem then dhcpv4_hex[60]=736167656D). This can be useful if the DHCP V6 option must be in hex (like DHCPv6 option 16, which is usually generated from DHCPv4 60 string value).
 
-Additionnaly, a `dhcpv4_hexlen[<opt#>]` array is available, as this can be useful to construct DHCPv6 options with 2-bytes length fields.
+Additionnaly, a `dhcpv4_hexlen[<opt#>]` array is provided, to construct DHCPv6 options needing 2-bytes length fields.
 
-Special case : DHCPv4 option 61 (client-id) is available as both `${optv4[61]}` and as `${macaddr}`. If you have checked and entered both "MAC Adress Clone" field in Unifi UI and option 61 in "DHCP Client Options", then the latter is stored (in both variables). If not, then the one you entered is stored in both variables.
+Special case : DHCPv4 option 61 (client-id) is available as both `${optv4[61]}` and as `${macaddr}`. If you have checked and entered both "MAC Adress Clone" field in Unifi UI and option 61 in "DHCP Client Options", then the latter is used (stored in both variables). If not, then the one you entered is stored in both variables.
 
 By default, dhcpv6-mod will copy the DHCPv4 CoS set in the UI to the DHCPv6 CoS option (-K) of odhcp6c, so you don't need to specify it.
 
-> So, even if a `dhcpv6_cos=n` option is available, DO NOT USE IT unless you know what you do, as it will probably break the DHCP lease (and your WAN connection). The reason : in almost 100% of situations (including Orange) the default behaviour is the correct one (DHCPv6 CoS must be the same as DHCPv4 CoS)
+> A `dhcpv6_cos=n` configuration option is also available, but DO NOT USE IT unless you know what you do, as it will probably break the DHCP lease (and your WAN connection). The reason : in almost 100% of situations (including Orange) the default behaviour is the correct one (DHCPv6 CoS will be the same as DHCPv4 CoS)
 
 DHCPv6 request option 6 (ORO, Option Requested options) can be overriden like so :
 
@@ -142,12 +144,12 @@ You can also use `${optv4[61]}` instead of `${macaddr}`, both will work.
 
 The `/data/local/etc/dhcpv6.conf` config file is first initialized to work for Orange ISP in France.
 
-Here are the 4 DHCP options that are by default propagated from V4 to V6 with needed transformations, e.g. headers specified by [RFC8415](https://datatracker.ietf.org/doc/html/rfc8415) for options 16 and 1) :
+Here are the 4 DHCP options that are by default propagated from V4 to V6 with needed transformations (e.g. headers specified by [RFC8415](https://datatracker.ietf.org/doc/html/rfc8415) for options 16 and 1) :
 
 | Name                                                                        | Opt V4 | Opt V6 | Header V6                                                                                                       | Value (from V4)                                             | Example of odhcp6c argument                                                                                                   |
 | --------------------------------------------------------------------------- | ------ | ------ | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | [Vendor class](https://www.rfc-editor.org/rfc/rfc3315.html#section-22.16)   | 60     | 16     | [0000040E 0005](https://www.iana.org/assignments/enterprise-numbers/) (4-byte IANA enterprise# + 2-byte length) | Vendor class string in hex                                  | -V [000000040E0005](https://www.iana.org/assignments/enterprise-numbers/)736167656D (here 5 bytes ASCII hex code for 'sagem') |
-| [Client identifier](https://www.rfc-editor.org/rfc/rfc8415.html#page-99)    | 61     | 1      | [0003 0001](https://datatracker.ietf.org/doc/html/rfc8415#section-11) (DUID type LL + hw type ethernet          | Mac Address Clone (UI)                                      | -c [00030001](https://datatracker.ietf.org/doc/html/rfc8415#section-11)xxxxxxxxxxxx (6 bytes in hex for cloned macaddr)       |
+| [Client identifier](https://www.rfc-editor.org/rfc/rfc8415.html#page-99)    | 61     | 1      | [0003 0001](https://datatracker.ietf.org/doc/html/rfc8415#section-11) (DUID type LL + hw type ethernet)         | Mac Address Clone (UI)                                      | -c [00030001](https://datatracker.ietf.org/doc/html/rfc8415#section-11)xxxxxxxxxxxx (6 bytes in hex for cloned macaddr)       |
 | [User class](https://www.rfc-editor.org/rfc/rfc8415.html#page-115)          | 77     | 15     | None, because -u already adds 2-byte length field (e.g. 002B)                                                   | When using -u, pass a string (not hexstring)                | -u FSVDSL_livebox.Internet.softathome.LiveboxN (here 43 or 0x2b bytes as hexstring)                                           |
 | [Authentication](https://www.rfc-editor.org/rfc/rfc8415.html#section-21.11) | 90     | 11     | None                                                                                                            | Authentication in hexstring (same as V4 opt 90 without ':') | -x 11:00....xx (70 bytes in hexstring for auth)                                                                               |
 
@@ -192,7 +194,7 @@ Then, you can test how `odhcp6c.sh` would fetch your interface details and gener
 
 (please replace ethx.832 with your interface and vlanid)
 
-This will not do anything other than generating a useful log like this one (the values are not mine, they come from test-files/interface.json) :
+This will not do anything other than generating a useful log like this one :
 
 ```console
 [dhcpv6-mod] NOTE: running in test mode using interface eth4.832
