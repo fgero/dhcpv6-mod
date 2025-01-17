@@ -14,7 +14,7 @@
 # "ubios-udapi-server" will call this script with arguments ("$@") : 
 # -e -v -s /usr/share/ubios-udapi-server/ubios-odhcp6c-script -D -P 56 <WANinterface>
 # -D means : Discard advertisements without any address or prefix proposed
-# -P 56 comes from UI WAN section (defaut 48 to change as IT MUST MATCH 
+# -P 56 comes from UI WAN section (defaut 48 to change for Orange)
 # what we will get from Orange e.g. 2a01:cb00:647:6c00::/56)
 
 SCRIPT_DIR=$(dirname ${0})
@@ -24,14 +24,50 @@ DHCPV6_CONF=/data/local/etc/dhcpv6.conf                             # Customized
 DEFAULT_DHCPV6_CONF=/data/dhcpv6-mod/dhcpv6-orange.conf             # Otherwise will take Orange conf
 DHCP6C_SUPPORTED_OPTIONS=/data/dhcpv6-mod/supported-options.json    # Which DHCPv6 options are possible
 
-default_dhcpv6_request_options="17,23,24"           # Default requested options (values for Orange), can be overriden in dhcpv6.conf
+# Default requested options (values for Orange), can be overriden in dhcpv6.conf
+# vendor-opts(17), name-servers(23), domain-search(24)
+default_dhcpv6_request_options="17,23,24"        
 
+# Default basic odhcp6c cmd options, can be overriden in dhcpv6.conf
 # -a deactivates support for reconfigure opcode, -f deactivates sending hostname, 
 # -R deactivates requesting option not specified in -r (which are specified with [default_]dhcpv6_request_options)
-default_odhcp6c_options="-a -f -R"      # Default basic odhcp6c cmd options   
+default_odhcp6c_options="-a -f -R"
 
 org_odhcp6c=/usr/sbin/odhcp6c-org       # We have renamed original to -org
+dhcp6_client=${org_odhcp6c}             # We will "exec" that at the end if not in test mode
+test_mode=0
 
+
+##########################################################################
+#    EXEC() UNIFI'S odhcp6c ORIGINAL BINARY AT THE END OF THIS SCRIPT    #
+#    Input variables that must be set :                                  #
+#    - dhcp6_client : original odhcp6c binary path (or /bin/echo)        #
+#    - arg_without_e : original args passed to odhcp6c by udapi-server   #
+#    - test_mode : 0 (false) or 1 (true)                                 #
+#    - odhcp6c_options : modified options to pass to dhcp6_client        #
+#    - odhcp6c_options_abbrev : obfuscated odhcp6c_options (log)         #
+##########################################################################
+
+execUnifiClient() {
+
+    # If Unifi's binary has not been set (should not happen), we can't exec it, so we abort
+    if [[ ! -x "${dhcp6_client}" ]]; then
+        >&2 echo "$HDR $(colorRed 'ERROR:') Unifi dhcpv6 client ${dhcp6_client} not found or not executable"
+        exit 1
+    fi
+
+    [[ -z "${odhcp6c_options}" ]] && odhcp6c_options_abbrev=""  # Typically when called from errExit()
+
+    if [[ $test_mode -eq 1 ]]; then printf "$HDR odhcp6c would be called with options : "
+    else
+        echo "$HDR Sleeping 5 seconds before launching ${dhcp6_client}, to let udhcpc send its discover..."
+        sleep 5
+        echo "$HDR" $(colorGreen "Launching exec") "${dhcp6_client} ${odhcp6c_options_abbrev} ${arg_without_e}"
+    fi
+
+    exec ${dhcp6_client} ${odhcp6c_options} ${arg_without_e}
+
+}
 
 ###########################################################
 #                    MESSAGE UTILITIES                    # 
@@ -42,9 +78,13 @@ colorGreen() { printf "$green$1$clear"; }
 colorRed() { printf "$red$1$clear"; }
 colorYellow() { printf "$yellow$1$clear"; }
 
+
 errExit() {
-  >&2 echo "$HDR $(colorRed 'ERROR:') $1"
-  exit 1
+    >&2 echo "$HDR $(colorRed 'ERROR:') $1"
+    # In case of error in this script we want to pass the original arguments
+    odhcp6c_options=""
+    # We pass control to the original executable
+    execUnifiClient
 }
 
 showPartOf() {   # show only some first and last chars of a string
@@ -63,26 +103,30 @@ showPartOf() {   # show only some first and last chars of a string
 # Interface name provided by udapi-server as last arg, we will look for it in JSON config
 arg_iface="${@: -1}"
 
-if [[ "$1" == "test" ]]; then   # if 1st arg is "test" don't do any harm, just simulate
-    test_mode=1
-    [[ $# -ne 2 ]] && errExit "test mode has 2 arguments, e.g. $0 test eth4.832" 
-    arg_iface=$2
-    echo "$HDR $(colorYellow 'NOTE: running in test mode') using interface ${arg_iface}"    
+if [[ "$1" == "test" ]]; then   # if 1st arg is "test" (simulation) don't exec dhcpv6 client at the end
     dhcp6_client=/bin/echo    # so that we don't really call odhcp6c 
+    test_mode=1
+    shift
+    if [[ $# -ne 1 ]]; then
+        >&2 echo "$HDR $(colorRed 'ERROR:') test mode has 2 arguments, e.g. $0 test eth4.832" 
+        exit 1
+    fi
+    arg_iface=$1
+    echo "$HDR $(colorYellow 'NOTE: running in test mode') using interface ${arg_iface}"    
     DHCPV6_CONF=${SCRIPT_DIR}/test-files/dhcpv6.conf      # test conf, if exists
     DEFAULT_DHCPV6_CONF=${SCRIPT_DIR}/dhcpv6-orange.conf  # otherwise will take Orange conf
     DHCP6C_SUPPORTED_OPTIONS=${SCRIPT_DIR}/supported-options.json
-else 
-    test_mode=0
-    dhcp6_client=${org_odhcp6c}
 fi
+
+# To remove the -e (log in stderr) provided by udapi-server in order to avoid duplicated messages in syslog daemon.log
+arg_without_e=$(echo " $@" | sed "s/ -e//")
 
 [[ ! -x "$dhcp6_client" ]] && errExit "could not find odhcp6c executable $dhcp6_client"
 echo "$HDR Selected DHCPv6 client executable (with support for CoS) : ${dhcp6_client}"
 
 
 ###########################################################
-#      FETCHING DHCP V4 OPTIONS FROM JSON STATE FILE      #
+#    FETCHING DHCP V4 OPTIONS FROM UBIOS-UDAPI-CLIENT     #
 ###########################################################
 
 interface_json=$(ubios-udapi-client GET -r /interfaces | jq -r '.[] | select(.identification.id=="'${arg_iface}'")')
@@ -90,6 +134,12 @@ interface_json=$(ubios-udapi-client GET -r /interfaces | jq -r '.[] | select(.id
 
 dhcpopt_json=$(echo $interface_json | jq -r '.ipv4.dhcpOptions')
 [[ "$dhcpopt_json" == "null" ]] && errExit "could not retrieve dhcpOptions of interface ${arg_iface}"
+
+# If there was no V4 option set on the interface, then do nothing and exec original odhcp6c
+if [[ "$dhcpopt_json" == "[]" ]]; then 
+    echo "$HDR No DHCPv4 options set for interface ${arg_iface}, nothing to do"
+    execUnifiClient
+fi
 
 for optn in $(echo $dhcpopt_json | jq -r '.[].optionNumber'); do
     val=$(echo $dhcpopt_json | jq -r '.[] | select(.optionNumber=='"${optn}"') | .value')
@@ -110,9 +160,14 @@ done
 
 # Fetch either MAC Adress Clone or DHCPv4 option 61, the latter takes precedence if both were entered
 macaddr=$(echo $interface_json | jq -r '.identification.macOverride' | tr 'abcdef' 'ABCDEF' | tr -d ':')
-[ -z "${optv4[61]}" ] && optv4[61]="${macaddr}" || macaddr="${optv4[61]}"    
-echo "$HDR Fetched MAC Address Clone (or option 61): length=${#macaddr}"
-[ "${#macaddr}" -ne 12 ] && echo "$HDR $(colorYellow "WARNING:") length of macaddress clone is not 12 digits"
+[ -z "${optv4[61]}" ] && optv4[61]="${macaddr}" || macaddr="${optv4[61]}"
+if [[ "$macaddr" == "null" ]]; then
+    macaddr=""
+    echo "$HDR $(colorYellow "WARNING:") could not fetch MAC Address clone (or option 61) from DHCPv4 config"
+else 
+    echo "$HDR Fetched MAC Address Clone (or option 61): length=${#macaddr}"
+    [ "${#macaddr}" -ne 12 ] && echo "$HDR $(colorYellow "WARNING:") length of macaddress clone is ${#macaddr}, not 12 digits"
+fi
 
 # Fetch IPv4 CoS, if set we will use it for -K <CoS>, can be overriden by dhcpv6_cos setting of dhcpv6.conf
 dhcpv4_cos=$(echo $interface_json | jq -r '.ipv4.cos')
@@ -129,14 +184,17 @@ duid_time_hex=$(printf '%04x' $duid_time_dec | tr 'abcdef' 'ABCDEF')
 ###########################################################
 
 # set -u will stop DHCPV6_CONF execution if using any optv4[] not found in JSON
-if [ ! -f ${DHCPV6_CONF} ]; then
-    echo "$HDR $(colorYellow 'WARNING:') took default dhcp6c options file ${DEFAULT_DHCPV6_CONF} as ${DHCPV6_CONF} was not found"
-    DHCPV6_CONF=${DEFAULT_DHCPV6_CONF}
-else
+if [ -f ${DHCPV6_CONF}.${arg_iface} ]; then
+    DHCPV6_CONF=${DHCPV6_CONF}.${arg_iface}
+    echo "$HDR Found interface-specific dhcp6c options file ${DHCPV6_CONF}"
+elif [ -f ${DHCPV6_CONF} ]; then
     echo "$HDR Found dhcp6c options file ${DHCPV6_CONF}"
+else 
+    echo "$HDR $(colorYellow 'WARNING:') took default dhcp6c options file ${DEFAULT_DHCPV6_CONF}, as ${DHCPV6_CONF} was not found"
+    DHCPV6_CONF=${DEFAULT_DHCPV6_CONF}
 fi
 
-trap ">&2 echo $HDR $(colorRed 'ERROR:') 'problem running dhcp6 config file '"${DHCPV6_CONF}"', probably a reference to a V4 option'" EXIT
+trap "errExit 'problem running '"${DHCPV6_CONF}"', probably a reference to a nonexistent V4 option'" EXIT
 set -u
 . ${DHCPV6_CONF} || errExit "problem running dhcp6 config file ${DHCPV6_CONF}"
 set +u
@@ -154,14 +212,14 @@ supported_options_json=$(cat $DHCP6C_SUPPORTED_OPTIONS | jq -r '.supportedOption
 if [[ -z "${odhcp6c_options+x}" ]]; then
     odhcp6c_options="${default_odhcp6c_options}"  # see at the top of this script for the default
 else
-    echo "$HDR" $(colorYellow "NOTE:") "odhcp6c_options default overriden to ${odhcp6c_options}"
+    echo "$HDR" "NOTE: default overriden to odhcp6c_options=${odhcp6c_options}"
 fi
 
 # -r argument : requested options from DHCP server, comma-separated
 if [[ -z "${dhcpv6_request_options+x}" ]]; then
     dhcpv6_request_options="${default_dhcpv6_request_options}"  # see at the top of this script for the default
 else
-    echo "$HDR" $(colorYellow "NOTE:") "dhcpv6_request_options default overriden to ${dhcpv6_request_options}"
+    echo "$HDR" "NOTE: default overriden to dhcpv6_request_options=${dhcpv6_request_options}"
 fi
 [[ -n "${dhcpv6_request_options}" ]] && odhcp6c_options="${odhcp6c_options} -r${dhcpv6_request_options}"
 
@@ -203,19 +261,5 @@ done
 
 echo "$HDR Successfully generated ${#optv6[@]} DHCPv6 options using ${DHCPV6_CONF}"
 
-
-###########################################################
-#        FINALLY, CALL (EXEC) THE "REAL" ODHCP6C          #
-###########################################################
-
-# We remove the -e (log in stderr) provided by udapi-server in order to avoid duplicated messages in syslog daemon.log
-arg_without_e=$(echo " $@" | sed "s/ -e//")
-
-if [[ $test_mode -eq 1 ]]; then printf "$HDR %s : " "$(colorGreen 'odhcp6c options would be')"
-else
-    echo "$HDR Sleeping 5 seconds before launching ${dhcp6_client}, to let udhcpc send its discover..."
-    sleep 5
-    echo "$HDR" $(colorGreen "Launching exec") "${dhcp6_client} ${odhcp6c_options_abbrev} ${arg_without_e}"
-fi
-
-exec ${dhcp6_client} ${odhcp6c_options} ${arg_without_e}
+# Replace the current shell with Unifi's original odhcp6c binary (via exec) 
+execUnifiClient
