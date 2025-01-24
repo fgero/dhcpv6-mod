@@ -35,7 +35,8 @@ errExit() {
 ###########################################################
 
 get_elaps_of_process() {
-    process_age=$(ps -o etimes= -C $1)
+    # if multiple processes match $1 command, take the oldest
+    process_age=$(ps -o etimes= -C $1 | sort -bn | tail -1)
     [[ -z "${process_age}" ]] && process_age="ERROR"
     printf "%s" ${process_age}
 }

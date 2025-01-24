@@ -8,7 +8,7 @@
 
 ### ⚠️ **Attention**
 
-You need <u>**UnifiOS 3.2.9 at least**</u> to use dhcpv6-mod (4.x is recommended as I can no longer test in v3).
+You need <u>**UnifiOS 3.2.9 at least**</u> to use dhcpv6-mod (4.x is recommended as I can no longer test in 3.x).
 
 ---
 
@@ -94,7 +94,7 @@ mv dhcpv6-mod-main dhcpv6-mod
 
 The installation script will automatically create a `/data/local/etc/dhcpv6.conf` config file, with Orange settings by default.
 
-Here are the 4 DHCP options that are, by default, propagated from V4 to V6, with transformations for V6 option 16 and option 1 (see [RFC8415](https://datatracker.ietf.org/doc/html/rfc8415)) :
+Here are the 4 DHCP options that are, <u>by default</u>, propagated from V4 to V6, with transformations for V6 option 16 and option 1 (see [RFC8415](https://datatracker.ietf.org/doc/html/rfc8415)) :
 
 | Name                                                                        | Opt V4 | Opt V6 | Header V6                                                                                                       | Value (from V4)                                             | Example of odhcp6c argument                                                                                                   |
 | --------------------------------------------------------------------------- | ------ | ------ | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -104,6 +104,10 @@ Here are the 4 DHCP options that are, by default, propagated from V4 to V6, with
 | [Authentication](https://www.rfc-editor.org/rfc/rfc8415.html#section-21.11) | 90     | 11     | None                                                                                                            | Authentication in hexstring (same as V4 opt 90 without ':') | -x 11:00....xx (70 bytes in hexstring for auth)                                                                               |
 
 If you <u>don't</u> want these Orange France ISP standard settings, the first time you install dhcpv6-mod, you must create and customize your own `/data/local/etc/dhcpv6.conf` file before moving to the next section (installation) : please refer to [CONFIGURE.md](docs/CONFIGURE.md).
+
+&nbsp;
+
+> **Note** : if you have 2 connected WAN interfaces (i.e. a failover WAN), and you want DHCPv6 <u>for both</u>, then please refer to [MULTIPLE_WAN.md](docs/MULTIPLE_WAN.md)
 
 &nbsp;
 
