@@ -1,18 +1,25 @@
 # dhcpv6-mod
 
 <p align="left">
-  <em><b>dhcpv6-mod</b> allows Unifi Gateways (UDMs, UDR, UCGs) to provide DHCP V6 client options required by some ISPs (e.g. Orange France), enabling dual IPv4 and IPv6 internet connection.</em>
+  <em><b>dhcpv6-mod</b> allows Unifi Gateways (UDMs, UDR, UCGs) to generate DHCP V6 client options required by some ISPs (e.g. Orange France), enabling dual IPv4 and IPv6 internet connection.</em>
 </p>
 
+## &nbsp;
+
+### ⚠️ ** NEW **
+
+Since <u>**UnifiOS 4.4.x**</u> you can manually enter the DHCP v6 options using Unifi's UI, just like you entered the V4 options.
+
+When you will upgrade Unifi OS to 4.4+, if you want to use this new feature, just don't run `install-dhcpv6-mod.sh`
+
+Note that dhcpv6-mod continues to work in 4.4+ if you want to install it (in that case you don't need to enter any V6 options in the UI).
+
 ---
 
-### ⚠️ **Attention**
+&nbsp;
+&nbsp;
 
-You need <u>**UnifiOS 3.2.9 at least**</u> to use dhcpv6-mod (4.x is recommended as I can no longer test in 3.x).
-
----
-
-Since we cannot configure specific DHCPv6 client options in the WAN settings, this mod automatically generates them using the DHCPv4 options you've already set in Unifi Network UI.
+This mod automatically generates DHCPv6 optins using the DHCPv4 options you've already set in Unifi Network UI.
 
 If you don't want dhcpv6-mod's default DHCPv6 options (designed for Orange France ISP), you can configure your own options (see the [Initialize DHCPv6 config file](#configure_dhcpv6) section).
 
