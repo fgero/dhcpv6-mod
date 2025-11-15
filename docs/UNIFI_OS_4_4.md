@@ -38,8 +38,8 @@ Then select "Internet", and then the WAN connection (like "Internet 1"/"WAN 1")
 
 You should have something like this, with a working IPv4 Configuration :
 
-![Unifi OS 4.4 IPv4 settings](images/OS44_IPV4_WAN_settings.png#gh-dark-mode-only)
-![Unifi OS 4.4 IPv4 settings](images/OS44_IPV4_WAN_settings_light.png#gh-light-mode-only)
+![Unifi OS 4.4 IPv4 settings](../images/OS44_IPV4_WAN_settings.png#gh-dark-mode-only)
+![Unifi OS 4.4 IPv4 settings](../images/OS44_IPV4_WAN_settings_light.png#gh-light-mode-only)
 
 Scroll down until you see both "IPv4 Configuration" and "IPv6 Configuration" sections
 
@@ -62,8 +62,8 @@ For the `DNS server`, repeat what you've set for the same DHCPv4 option (for me 
 
 Now, the V4 and V6 options should look like this :
 
-![Unifi OS 4.4 IPv4v6 settings](images/OS44_IPV4V6_WAN_settings.png#gh-dark-mode-only)
-![Unifi OS 4.4 IPv4v6 settings](images/OS44_IPV4V6_WAN_settings_light.png#gh-light-mode-only)
+![Unifi OS 4.4 IPv4v6 settings](../images/OS44_IPV4V6_WAN_settings.png#gh-dark-mode-only)
+![Unifi OS 4.4 IPv4v6 settings](../images/OS44_IPV4V6_WAN_settings_light.png#gh-light-mode-only)
 
 ---
 
