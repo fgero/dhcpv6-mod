@@ -6,13 +6,16 @@
 
 ## &nbsp;
 
-### ⚠️ ** NEW **
+### ⚠️ ** NEW AND IMPORTANT **
 
-Since <u>**UnifiOS 4.4.x**</u> you can manually enter the DHCP v6 options using Unifi's UI, just like you entered the V4 options.
+Since <u>**UnifiOS 4.4**</u> you can manually enter the DHCP v6 options using Unifi's UI, just like you entered the V4 options previously.
 
-When you will upgrade Unifi OS to 4.4+, if you want to use this new feature, just don't run `install-dhcpv6-mod.sh`
+As a consequence, in 4.4+, **this mod is not needed anymore**.
+
+When you will upgrade Unifi OS from 4.3 (or less) to 4.4 (or more), if you want to use Unifi's new V6 dialog, just **don't run `install-dhcpv6-mod.sh`**, and refer to [this guide](docs/UNIFI_OS_4_4.md) to move to Unifi's native DHCPv6 settings (and to uninstall dhcpv6_mod if needed).
 
 Note that dhcpv6-mod continues to work in 4.4+ if you want to install it (in that case you don't need to enter any V6 options in the UI).
+But in the future I will not be able to maintain the mod (although it should continue to work), so I **strongly suggest** to stop installing it.
 
 ---
 
@@ -22,12 +25,6 @@ Note that dhcpv6-mod continues to work in 4.4+ if you want to install it (in tha
 This mod automatically generates DHCPv6 optins using the DHCPv4 options you've already set in Unifi Network UI.
 
 If you don't want dhcpv6-mod's default DHCPv6 options (designed for Orange France ISP), you can configure your own options (see the [Initialize DHCPv6 config file](#configure_dhcpv6) section).
-
-&nbsp;
-&nbsp;
-
-> **Important note** :
-> after any non-documentation commit of this repo, or if you update your config file, or after a firmware update, don't forget to run `install-dhcpv6-mod.sh` again (see [Install or update dhcpv6-mod](#install_dhcpv6_mod))
 
 &nbsp;
 &nbsp;
